@@ -1,0 +1,39 @@
+use bevy::{prelude::*, pbr::CascadeShadowConfigBuilder};
+
+pub fn setup_lighting(mut commands: Commands) {
+    commands.spawn( setup_directional_light() );
+}
+
+fn setup_directional_light() -> DirectionalLightBundle {
+    // Configure a properly scaled cascade shadow map for this scene (defaults are too large, mesh units are in km)
+    let cascade_shadow_config = CascadeShadowConfigBuilder {
+        first_cascade_far_bound: 0.3,
+        maximum_distance: 3.0,
+        ..default()
+    }.build();
+    // Sun
+    DirectionalLightBundle {
+        directional_light: DirectionalLight {
+            color: Color::rgb(0.98, 0.95, 0.82),
+            shadows_enabled: true,
+            ..default()
+        },
+        transform: Transform::from_xyz(0.0, 100.0, 0.0)
+            .looking_at(Vec3::new(-0.15, -2.0, 0.25), Vec3::Y),
+        cascade_shadow_config,
+        ..default()
+    }
+}
+
+// fn setup_point_light() -> PointLightBundle {
+//     PointLightBundle {
+//         point_light: PointLight {
+//             intensity: 10000.0,
+//             shadows_enabled: true,
+//             range: 1000.0,
+//             ..default()
+//         },
+//         transform: Transform::from_xyz(-20.0, 16.0, 34.0),
+//         ..default()
+//     }
+// }

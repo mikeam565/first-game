@@ -1,0 +1,14 @@
+## Short/Medium term
+* Grass
+    - Improve general lighting + normal mapping of grass (rounded normal)
+    - Improve the general API around grass
+    - Further grass ideas: cover a terrain with grass, better shadows (base of grass has hard edge, I think this feature would be called occlusion?), etc.
+    - Direct control of grass height vs grass scale factor
+* Player object
+    - movement + camera control
+
+## Longer term concerns
+* Grass should have density reduced based on distance from player object
+
+# Various Links
+https://stackoverflow.com/questions/66677098/how-can-i-manually-create-meshes-in-bevy-with-vertices

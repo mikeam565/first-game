@@ -19,8 +19,8 @@ const GRASS_SPACING: f32 = 0.2;
 const GRASS_OFFSET: f32 = 0.1;
 const ENABLE_WIREFRAME: bool = false;
 const WIND_STRENGTH: f32 = 1.0;
-const WIND_SPEED: f64 = 1.0;
-const WIND_CONSISTENCY: f64 = 100.0; //
+const WIND_SPEED: f64 = 0.5;
+const WIND_CONSISTENCY: f64 = 25.0; //
 
 // Grass Component
 #[derive(Component,Clone)]
@@ -187,8 +187,7 @@ fn apply_wind(mesh: &mut Mesh, grass: &Grass, perlin: &PerlinNoiseEntity, time: 
 }
 
 fn sample_noise(perlin: &Perlin, x: f32, z: f32, time: f64) -> f32 {
-    // let noise = perlin.get([time*WIND_SPEED, WIND_CONSISTENCY * (x as f64 + z as f64)]) as f32;
-    let noise = perlin.get([time.sin()*WIND_SPEED*(x as f64/WIND_CONSISTENCY), time.sin()*WIND_SPEED*(-z as f64/WIND_CONSISTENCY)]) as f32; // this looks the best in the first seconds but destabilizes
+    let noise = perlin.get([WIND_SPEED * time + (x as f64/WIND_CONSISTENCY), WIND_SPEED * time + (z as f64/WIND_CONSISTENCY)]) as f32;
     noise
 }
 

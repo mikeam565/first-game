@@ -7,8 +7,8 @@ pub fn setup_lighting(mut commands: Commands) {
 fn setup_directional_light() -> DirectionalLightBundle {
     // Configure a properly scaled cascade shadow map for this scene (defaults are too large, mesh units are in km)
     let cascade_shadow_config = CascadeShadowConfigBuilder {
-        first_cascade_far_bound: 0.3,
-        maximum_distance: 3.0,
+        first_cascade_far_bound: 2.0,
+        maximum_distance: 50.0,
         ..default()
     }.build();
     // Sun
@@ -18,8 +18,8 @@ fn setup_directional_light() -> DirectionalLightBundle {
             shadows_enabled: true,
             ..default()
         },
-        transform: Transform::from_xyz(0.0, 100.0, 0.0)
-            .looking_at(Vec3::new(-0.15, -2.0, 0.25), Vec3::Y),
+        transform: Transform::from_xyz(0.0,0.0,0.0)
+            .looking_at(Vec3::new(0.0,-1.0,1.0), Vec3::Y),
         cascade_shadow_config,
         ..default()
     }
@@ -37,3 +37,11 @@ fn setup_directional_light() -> DirectionalLightBundle {
 //         ..default()
 //     }
 // }
+
+pub struct LightingPlugin;
+
+impl Plugin for LightingPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_systems(Startup, setup_lighting);
+    }
+}

@@ -11,16 +11,17 @@ const NUM_GRASS_X: u32 = 256;
 const NUM_GRASS_Y: u32 = 256;
 const GRASS_BLADE_VERTICES: u32 = 7;
 const GRASS_WIDTH: f32 = 0.1;
-const GRASS_HEIGHT: f32 = 3.0;
-const GRASS_SCALE_FACTOR: f32 = 0.4;
-const GRASS_HEIGHT_VARIATION_FACTOR: f32 = 0.4;
+const GRASS_HEIGHT: f32 = 1.0;
+const GRASS_SCALE_FACTOR: f32 = 0.9;
+const GRASS_HEIGHT_VARIATION_FACTOR: f32 = 0.2;
 const GRASS_STRAIGHTNESS: f32 = 10.0; // for now, as opposed to a curve factor, just modifying denominator for curve calcs
 const GRASS_SPACING: f32 = 0.2;
 const GRASS_OFFSET: f32 = 0.1;
 const ENABLE_WIREFRAME: bool = false;
-const WIND_STRENGTH: f32 = 1.0;
+const WIND_STRENGTH: f32 = 0.5;
 const WIND_SPEED: f64 = 0.5;
 const WIND_CONSISTENCY: f64 = 25.0; //
+const WIND_LEAN: f32 = 0.0; // determines how already bent grass will be at 0 wind
 
 // Grass Component
 #[derive(Component,Clone)]
@@ -67,8 +68,11 @@ pub fn generate_grass(
     generate_grass_geometry(&all_verts, all_indices, &mut mesh);
 
     let grass_material = StandardMaterial {
-        base_color: Color::GREEN.into(),
+        base_color: Color::DARK_GREEN.into(),
         double_sided: false,
+        perceptual_roughness: 0.1,
+        diffuse_transmission: 0.5,
+        reflectance: 0.0,
         cull_mode: None,
         ..default()
     };
@@ -86,7 +90,7 @@ pub fn generate_grass(
 
 fn generate_single_blade_verts(x: f32, z: f32, blade_number: u32, blade_height: f32) -> (Vec<Vec3>, Vec<u32>) {
     let blade_number_shift = blade_number*GRASS_BLADE_VERTICES;
-    
+    // vertex transforms
     let t1 = Transform::from_xyz(x, 0.0, z);
     let t2 = Transform::from_xyz(x+GRASS_WIDTH, 0.0, z);
     let t3 = Transform::from_xyz(x, blade_height/3.0, z);
@@ -97,10 +101,14 @@ fn generate_single_blade_verts(x: f32, z: f32, blade_number: u32, blade_height: 
 
     let mut transforms = vec![t1,t2,t3,t4,t5,t6,t7];
     
+    // // physical randomization of grass blades
+    // rotate grass randomly around y
+    apply_y_rotation(&mut transforms, x, z);
+    
     // curve the grass all one way
     apply_curve(&mut transforms, x, z);
 
-    // rotate grass randomly around y
+    // rotate grass again
     apply_y_rotation(&mut transforms, x, z);
     
     let verts: Vec<Vec3> = transforms.iter().map(|t| t.translation).collect();
@@ -138,7 +146,7 @@ fn generate_grass_geometry(verts: &Vec<Vec3>, vec_indices: Vec<u32>, mesh: &mut 
     let indices = mesh::Indices::U32(vec_indices);
 
     // for now, normals are same as verts, and UV is [1.0,1.0]
-    let vertices: Vec<([f32;3],[f32;3],[f32;2])> = verts.iter().map(|v| { (v.to_array(), v.to_array(), [1.0,1.0])} ).collect();
+    let vertices: Vec<([f32;3],[f32;3],[f32;2])> = verts.iter().map(|v| { (v.to_array(), v.to_array(), [0.0,0.0])} ).collect();
 
     let mut positions = Vec::new();
     let mut normals = Vec::new();
@@ -176,6 +184,7 @@ fn apply_wind(mesh: &mut Mesh, grass: &Grass, perlin: &PerlinNoiseEntity, time: 
     let VertexAttributeValues::Float32x3(pos_attr) = pos_attr else {
         panic!("Unexpected vertex format, expected Float32x3");
     };
+    // for now modify x,z pos. Ideally apply curve instead
     for i in 0..pos_attr.len() {
         let pos = pos_attr.get_mut(i).unwrap();
         let initial = grass.initial_vertices.get(i).unwrap();
@@ -187,14 +196,24 @@ fn apply_wind(mesh: &mut Mesh, grass: &Grass, perlin: &PerlinNoiseEntity, time: 
 }
 
 fn sample_noise(perlin: &Perlin, x: f32, z: f32, time: f64) -> f32 {
-    let noise = perlin.get([WIND_SPEED * time + (x as f64/WIND_CONSISTENCY), WIND_SPEED * time + (z as f64/WIND_CONSISTENCY)]) as f32;
+    let noise = WIND_LEAN + perlin.get([WIND_SPEED * time + (x as f64/WIND_CONSISTENCY), WIND_SPEED * time + (z as f64/WIND_CONSISTENCY)]) as f32;
     noise
+}
+
+fn add_grass(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    asset_server: Res<AssetServer>,
+) {
+    generate_grass(&mut commands, &mut meshes, &mut materials);
 }
 
 pub struct GrassPlugin;
 
 impl Plugin for GrassPlugin {
     fn build(&self, app: &mut App) {
+        app.add_systems(Startup, add_grass);
         app.add_systems(Update, update_grass);
     }
 }

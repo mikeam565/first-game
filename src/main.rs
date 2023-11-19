@@ -1,7 +1,8 @@
 mod entities;
 mod util;
 
-use bevy::{prelude::*, pbr::{CascadeShadowConfigBuilder, NotShadowCaster}, core_pipeline::{tonemapping::Tonemapping, bloom::{BloomSettings, BloomCompositeMode}}};
+use bevy::{prelude::*, pbr::{CascadeShadowConfigBuilder, NotShadowCaster}, core_pipeline::{tonemapping::Tonemapping, bloom::{BloomSettings, BloomCompositeMode}}, diagnostic::{LogDiagnosticsPlugin, FrameTimeDiagnosticsPlugin}};
+use bevy_atmosphere::prelude::*;
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use crate::entities as ent;
 
@@ -16,30 +17,20 @@ fn main() {
         })
         .add_plugins((
             DefaultPlugins,
-            StartupPlugin,
             WorldInspectorPlugin::new(),
-            ent::player::PlayerPlugin,
-            ent::projectiles::ProjectilePlugin,
-            ent::enemy::EnemyPlugin,
+            LogDiagnosticsPlugin::default(),
+            FrameTimeDiagnosticsPlugin::default(),
+            AtmospherePlugin,
             util::camera::CameraPlugin,
+            util::lighting::LightingPlugin,
+            util::perlin::PerlinPlugin,
+            ent::terrain::TerrainPlugin,
             ent::grass::GrassPlugin,
+            ent::player::PlayerPlugin,
+            ent::enemy::EnemyPlugin,
+            ent::projectiles::ProjectilePlugin,
         ))
         .register_type::<ent::player::Player>()
         .register_type::<ent::projectiles::BasicProjectile>()
         .run();
-}
-
-pub struct StartupPlugin;
-
-impl Plugin for StartupPlugin {
-    fn build(&self, app: &mut App) {
-        app.add_systems(Startup, (
-            util::perlin::setup_perlin,
-            util::lighting::setup_lighting,
-            util::camera::setup_camera,
-            ent::player::setup_player,
-            ent::enemy::setup_enemy,
-            ent::terrain::setup_scene,
-        ));
-    }
 }

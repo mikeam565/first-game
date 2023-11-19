@@ -9,6 +9,7 @@ edition = "2021"
 # remember to revert dynamic_linking before game release
 bevy = { version = "0.12.0", features = ["dynamic_linking"] }
 bevy-inspector-egui = "0.21.0"
+bevy_atmosphere = "0.8.1"
 noise = "0.8.2"
 rand = "0.8.5"
 

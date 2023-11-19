@@ -72,21 +72,14 @@ fn projectile_movement(
 }
 
 fn aim(projectile: Vec3, mut dest: Vec3) -> Vec3 {
-    println!("Shooting from {}", projectile);
-    println!("Closest enemy is at {}", dest);
     // passable gravity compensation for now
     dest.y += ent::enemy::ENEMY_HEIGHT/2.0;
-    println!("Targeting the top of the enemy at {}", dest);
     let distance = projectile.distance(dest);
     let max_distance = 90.0; // highly dependent on the projectile velocity used
     let x = if distance > max_distance { 1.0 } else { distance / max_distance };
-    println!("x={}", x);
     let compensation = Vec3::Y*x;
     let pre_compensation = (dest - projectile).normalize();
-    println!("Precomp = {}", pre_compensation);
-    println!("Applying compensation = {}", compensation);
     pre_compensation + compensation
-    
 }
 
 pub struct ProjectilePlugin;

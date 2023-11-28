@@ -11,8 +11,8 @@ const NUM_GRASS_X: u32 = 256;
 const NUM_GRASS_Y: u32 = 256;
 const GRASS_BLADE_VERTICES: u32 = 7;
 const GRASS_WIDTH: f32 = 0.1;
-const GRASS_HEIGHT: f32 = 1.0;
-const GRASS_SCALE_FACTOR: f32 = 0.9;
+const GRASS_HEIGHT: f32 = 3.0;
+const GRASS_SCALE_FACTOR: f32 = 0.3;
 const GRASS_HEIGHT_VARIATION_FACTOR: f32 = 0.2;
 const GRASS_STRAIGHTNESS: f32 = 10.0; // for now, as opposed to a curve factor, just modifying denominator for curve calcs
 const GRASS_SPACING: f32 = 0.2;
@@ -27,7 +27,7 @@ const WIND_LEAN: f32 = 0.0; // determines how already bent grass will be at 0 wi
 #[derive(Component,Clone)]
 struct Grass {
     initial_vertices: Vec<Vec3>,
-    initial_positions: Vec<[f32;2]>
+    initial_positions: Vec<[f32;3]>
 }
 
 // Grass offsets component
@@ -57,7 +57,7 @@ pub fn generate_grass(
             // let blade_height = GRASS_HEIGHT;
             let (mut verts, mut indices) = generate_single_blade_verts(x_offset, z_offset, blade_number, blade_height);
             for _ in 0..verts.len() {
-                grass_offsets.push([x_offset,z_offset]);
+                grass_offsets.push([x_offset,0.0,z_offset]);
             }
             all_verts.append(&mut verts);
             all_indices.append(&mut indices);
@@ -71,8 +71,8 @@ pub fn generate_grass(
         base_color: Color::DARK_GREEN.into(),
         double_sided: false,
         perceptual_roughness: 0.1,
-        diffuse_transmission: 0.5,
-        reflectance: 0.0,
+        // diffuse_transmission: 0.5,
+        reflectance: 0.1,
         cull_mode: None,
         ..default()
     };
@@ -113,7 +113,6 @@ fn generate_single_blade_verts(x: f32, z: f32, blade_number: u32, blade_height: 
     
     let verts: Vec<Vec3> = transforms.iter().map(|t| t.translation).collect();
 
-    // can't think of non-manual way to address indices
     let indices: Vec<u32> = vec![
         blade_number_shift+0, blade_number_shift+1, blade_number_shift+2,
         blade_number_shift+2, blade_number_shift+1, blade_number_shift+3,
@@ -189,7 +188,7 @@ fn apply_wind(mesh: &mut Mesh, grass: &Grass, perlin: &PerlinNoiseEntity, time: 
         let pos = pos_attr.get_mut(i).unwrap();
         let initial = grass.initial_vertices.get(i).unwrap();
         let grass_pos = grass.initial_positions.get(i).unwrap();
-        let curve_amount = WIND_STRENGTH * (sample_noise(&wind_perlin, grass_pos[0], grass_pos[1],  time) * (pos[1] / GRASS_HEIGHT));
+        let curve_amount = WIND_STRENGTH * (sample_noise(&wind_perlin, grass_pos[0], grass_pos[2],  time) * (pos[1] / GRASS_HEIGHT));
         pos[0] = initial.x + curve_amount;
         pos[2] = initial.z + curve_amount;
     }

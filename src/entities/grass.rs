@@ -52,12 +52,12 @@ pub fn generate_grass(
             let rand1 = if GRASS_OFFSET!=0.0 {rng.gen_range(-GRASS_OFFSET..GRASS_OFFSET)} else {0.0};
             let rand2 = if GRASS_OFFSET!=0.0 {rng.gen_range(-GRASS_OFFSET..GRASS_OFFSET)} else {0.0};
             let x_offset = x * GRASS_SPACING + rand1;
+            let y = 0.0;
             let z_offset = z * GRASS_SPACING + rand2;
             let blade_height = GRASS_HEIGHT + (height_perlin.get([x_offset as f64, z_offset as f64]) as f32 * GRASS_HEIGHT_VARIATION_FACTOR);
-            // let blade_height = GRASS_HEIGHT;
-            let (mut verts, mut indices) = generate_single_blade_verts(x_offset, z_offset, blade_number, blade_height);
+            let (mut verts, mut indices) = generate_single_blade_verts(x_offset, y, z_offset, blade_number, blade_height);
             for _ in 0..verts.len() {
-                grass_offsets.push([x_offset,0.0,z_offset]);
+                grass_offsets.push([x_offset,y,z_offset]);
             }
             all_verts.append(&mut verts);
             all_indices.append(&mut indices);
@@ -88,28 +88,28 @@ pub fn generate_grass(
     });
 }
 
-fn generate_single_blade_verts(x: f32, z: f32, blade_number: u32, blade_height: f32) -> (Vec<Vec3>, Vec<u32>) {
+fn generate_single_blade_verts(x: f32, y: f32, z: f32, blade_number: u32, blade_height: f32) -> (Vec<Vec3>, Vec<u32>) {
     let blade_number_shift = blade_number*GRASS_BLADE_VERTICES;
     // vertex transforms
-    let t1 = Transform::from_xyz(x, 0.0, z);
-    let t2 = Transform::from_xyz(x+GRASS_WIDTH, 0.0, z);
-    let t3 = Transform::from_xyz(x, blade_height/3.0, z);
-    let t4 = Transform::from_xyz(x+GRASS_WIDTH, blade_height/3.0, z);
-    let t5 = Transform::from_xyz(x, 2.0*blade_height/3.0, z);
-    let t6 = Transform::from_xyz(x + GRASS_WIDTH, 2.0*blade_height/3.0, z);
-    let t7 = Transform::from_xyz(x+(GRASS_WIDTH/2.0), blade_height, z);
+    let t1 = Transform::from_xyz(x, y, z);
+    let t2 = Transform::from_xyz(x+GRASS_WIDTH, y, z);
+    let t3 = Transform::from_xyz(x, y+blade_height/3.0, z);
+    let t4 = Transform::from_xyz(x+GRASS_WIDTH, y+blade_height/3.0, z);
+    let t5 = Transform::from_xyz(x, y+2.0*blade_height/3.0, z);
+    let t6 = Transform::from_xyz(x + GRASS_WIDTH, y+2.0*blade_height/3.0, z);
+    let t7 = Transform::from_xyz(x+(GRASS_WIDTH/2.0), y+blade_height, z);
 
     let mut transforms = vec![t1,t2,t3,t4,t5,t6,t7];
     
     // // physical randomization of grass blades
     // rotate grass randomly around y
-    apply_y_rotation(&mut transforms, x, z);
+    apply_y_rotation(&mut transforms, x, y, z);
     
     // curve the grass all one way
-    apply_curve(&mut transforms, x, z);
+    apply_curve(&mut transforms, x, y, z);
 
     // rotate grass again
-    apply_y_rotation(&mut transforms, x, z);
+    apply_y_rotation(&mut transforms, x, y, z);
     
     let verts: Vec<Vec3> = transforms.iter().map(|t| t.translation).collect();
 
@@ -124,8 +124,8 @@ fn generate_single_blade_verts(x: f32, z: f32, blade_number: u32, blade_height: 
     (verts, indices)
 }
 
-fn apply_y_rotation(transforms: &mut Vec<Transform>, x: f32, z: f32) {
-    let y_rotation_point = Vec3::new(x,0.0,z);
+fn apply_y_rotation(transforms: &mut Vec<Transform>, x: f32, y:f32, z: f32) {
+    let y_rotation_point = Vec3::new(x,y,z);
     let rand_rotation = (thread_rng().gen_range(0..628) / 100) as f32;
     for t in transforms {
         t.rotate_around(y_rotation_point, Quat::from_rotation_y(rand_rotation));
@@ -133,7 +133,7 @@ fn apply_y_rotation(transforms: &mut Vec<Transform>, x: f32, z: f32) {
 }
 
 // todo: clean up
-fn apply_curve(transforms: &mut Vec<Transform>, x: f32, z: f32) {
+fn apply_curve(transforms: &mut Vec<Transform>, x: f32, y:f32, z: f32) {
     let curve_rotation_point = Vec3::new(x + thread_rng().gen_range(0..2) as f32 / 10.0, 0.0, z + thread_rng().gen_range(0..2) as f32 / 10.0);
     let rand_curve = (thread_rng().gen_range(101..110) / 100) as f32;
     for t in transforms {

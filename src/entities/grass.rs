@@ -11,17 +11,18 @@ const NUM_GRASS_X: u32 = 256;
 const NUM_GRASS_Y: u32 = 256;
 const GRASS_BLADE_VERTICES: u32 = 7;
 const GRASS_WIDTH: f32 = 0.1;
-const GRASS_HEIGHT: f32 = 3.0;
-const GRASS_SCALE_FACTOR: f32 = 0.3;
+const GRASS_HEIGHT: f32 = 1.0;
+const GRASS_SCALE_FACTOR: f32 = 1.0;
 const GRASS_HEIGHT_VARIATION_FACTOR: f32 = 0.2;
 const GRASS_STRAIGHTNESS: f32 = 10.0; // for now, as opposed to a curve factor, just modifying denominator for curve calcs
 const GRASS_SPACING: f32 = 0.2;
 const GRASS_OFFSET: f32 = 0.1;
 const ENABLE_WIREFRAME: bool = false;
 const WIND_STRENGTH: f32 = 0.5;
-const WIND_SPEED: f64 = 0.5;
-const WIND_CONSISTENCY: f64 = 25.0; //
+const WIND_SPEED: f64 = 0.2;
+const WIND_CONSISTENCY: f64 = 50.0; //
 const WIND_LEAN: f32 = 0.0; // determines how already bent grass will be at 0 wind
+const CURVE_POWER: f32 = 1.0;
 
 // Grass Component
 #[derive(Component,Clone)]
@@ -193,7 +194,7 @@ fn apply_wind(mesh: &mut Mesh, grass: &Grass, perlin: &PerlinNoiseEntity, time: 
 
         let relative_vertex_height = pos[1] - y;
 
-        let curve_amount = WIND_STRENGTH * (sample_noise(&wind_perlin, *x, *z, time) * (relative_vertex_height/GRASS_HEIGHT));
+        let curve_amount = WIND_STRENGTH * (sample_noise(&wind_perlin, *x, *z, time) * (relative_vertex_height.powf(CURVE_POWER)/GRASS_HEIGHT.powf(CURVE_POWER)));
         pos[0] = initial.x + curve_amount;
         pos[2] = initial.z + curve_amount;
     }

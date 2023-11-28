@@ -200,8 +200,7 @@ fn apply_wind(mesh: &mut Mesh, grass: &Grass, perlin: &PerlinNoiseEntity, time: 
 }
 
 fn sample_noise(perlin: &Perlin, x: f32, z: f32, time: f64) -> f32 {
-    let noise = WIND_LEAN + perlin.get([WIND_SPEED * time + (x as f64/WIND_CONSISTENCY), WIND_SPEED * time + (z as f64/WIND_CONSISTENCY)]) as f32;
-    noise
+    WIND_LEAN + perlin.get([WIND_SPEED * time + (x as f64/WIND_CONSISTENCY), WIND_SPEED * time + (z as f64/WIND_CONSISTENCY)]) as f32
 }
 
 fn add_grass(

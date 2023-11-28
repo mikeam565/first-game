@@ -185,10 +185,15 @@ fn apply_wind(mesh: &mut Mesh, grass: &Grass, perlin: &PerlinNoiseEntity, time: 
     };
     // for now modify x,z pos. Ideally apply curve instead
     for i in 0..pos_attr.len() {
-        let pos = pos_attr.get_mut(i).unwrap();
-        let initial = grass.initial_vertices.get(i).unwrap();
-        let grass_pos = grass.initial_positions.get(i).unwrap();
-        let curve_amount = WIND_STRENGTH * (sample_noise(&wind_perlin, grass_pos[0], grass_pos[2],  time) * (pos[1] / GRASS_HEIGHT));
+        let pos = pos_attr.get_mut(i).unwrap(); // current vertex positions
+        let initial = grass.initial_vertices.get(i).unwrap(); // initial vertex positions
+        let grass_pos = grass.initial_positions.get(i).unwrap(); // initial grass positions
+
+        let [x, y, z] = grass_pos;
+
+        let relative_vertex_height = pos[1] - y;
+
+        let curve_amount = WIND_STRENGTH * (sample_noise(&wind_perlin, *x, *z, time) * (relative_vertex_height/GRASS_HEIGHT));
         pos[0] = initial.x + curve_amount;
         pos[2] = initial.z + curve_amount;
     }

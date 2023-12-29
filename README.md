@@ -6,3 +6,5 @@ My interests are terrain generation, AI, pathfinding, etc.
 
 So far, I've been working on implementing grass with wind. I've gotten pretty far in two days.  
 <img src="demo_sc.png">
+
+To follow along with updates on this project, check out my blog on [dev.to](https://dev.to/mikeam565)!

@@ -1,7 +1,7 @@
 mod entities;
 mod util;
 
-use bevy::{prelude::*, pbr::{CascadeShadowConfigBuilder, NotShadowCaster}, core_pipeline::{tonemapping::Tonemapping, bloom::{BloomSettings, BloomCompositeMode}}, diagnostic::{LogDiagnosticsPlugin, FrameTimeDiagnosticsPlugin}};
+use bevy::{prelude::*, pbr::{CascadeShadowConfigBuilder, NotShadowCaster, DirectionalLightShadowMap}, core_pipeline::{tonemapping::Tonemapping, bloom::{BloomSettings, BloomCompositeMode}}, diagnostic::{LogDiagnosticsPlugin, FrameTimeDiagnosticsPlugin}};
 use bevy_atmosphere::prelude::*;
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use crate::entities as ent;
@@ -14,6 +14,9 @@ fn main() {
             brightness: 0.5,
             color: Color::AZURE,
             ..default()
+        })
+        .insert_resource(DirectionalLightShadowMap {
+            size: 4096
         })
         .add_plugins((
             DefaultPlugins,

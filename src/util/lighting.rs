@@ -2,6 +2,10 @@ use bevy::{prelude::*, pbr::CascadeShadowConfigBuilder};
 
 pub fn setup_lighting(mut commands: Commands) {
     commands.spawn( setup_directional_light() );
+    commands.insert_resource(AmbientLight {
+        color: Color::AZURE,
+        brightness: 1.0
+    })
 }
 
 fn setup_directional_light() -> DirectionalLightBundle {
@@ -16,6 +20,7 @@ fn setup_directional_light() -> DirectionalLightBundle {
         directional_light: DirectionalLight {
             color: Color::rgb(0.98, 0.95, 0.82),
             shadows_enabled: true,
+            illuminance: 64000_f32,
             ..default()
         },
         transform: Transform::from_xyz(0.0,0.0,0.0)

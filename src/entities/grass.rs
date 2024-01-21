@@ -1,17 +1,17 @@
 use std::f32::consts::PI;
 
-use bevy::{prelude::*, render::{render_resource::PrimitiveTopology, mesh::{self, VertexAttributeValues}}, utils::HashMap};
+use bevy::{prelude::*, render::{render_resource::{PrimitiveTopology, Face}, mesh::{self, VertexAttributeValues}}, utils::HashMap};
 use noise::{Perlin, NoiseFn};
 use rand::{thread_rng, Rng};
-use crate::util::perlin::PerlinNoiseEntity;
+use crate::util::perlin::{PerlinNoiseEntity, self};
 
 // Grass constants
 const GRASS_BLADES: u32 = 65536;
 const NUM_GRASS_X: u32 = 256;
 const NUM_GRASS_Y: u32 = 256;
 const GRASS_BLADE_VERTICES: u32 = 7;
-const GRASS_WIDTH: f32 = 0.1;
-const GRASS_HEIGHT: f32 = 1.0;
+const GRASS_WIDTH: f32 = 0.08;
+const GRASS_HEIGHT: f32 = 2.0;
 const GRASS_SCALE_FACTOR: f32 = 1.0;
 const GRASS_HEIGHT_VARIATION_FACTOR: f32 = 0.2;
 const GRASS_STRAIGHTNESS: f32 = 10.0; // for now, as opposed to a curve factor, just modifying denominator for curve calcs
@@ -22,7 +22,7 @@ const WIND_STRENGTH: f32 = 0.5;
 const WIND_SPEED: f64 = 0.2;
 const WIND_CONSISTENCY: f64 = 50.0; //
 const WIND_LEAN: f32 = 0.0; // determines how already bent grass will be at 0 wind
-const CURVE_POWER: f32 = 1.0;
+const CURVE_POWER: f32 = 1.0; // the linearity / exponentiality of the application/bend of the wind
 
 // Grass Component
 #[derive(Component,Clone)]
@@ -44,8 +44,7 @@ pub fn generate_grass(
     let mut all_verts: Vec<Vec3> = vec![];
     let mut all_indices: Vec<u32> = vec![];
     let mut blade_number = 0;
-    let perlin = PerlinNoiseEntity::new();
-    let height_perlin = perlin.grass_height;
+    let height_perlin = perlin::grass_perlin();
     for i in 0..NUM_GRASS_X {
         let x = i as f32;
         for j in 0..NUM_GRASS_Y {
@@ -69,12 +68,12 @@ pub fn generate_grass(
     generate_grass_geometry(&all_verts, all_indices, &mut mesh);
 
     let grass_material = StandardMaterial {
-        base_color: Color::DARK_GREEN.into(),
+        base_color: Color::WHITE,
         double_sided: false,
         perceptual_roughness: 0.1,
         // diffuse_transmission: 0.5,
         reflectance: 0.1,
-        cull_mode: None,
+        cull_mode: Some(Face::Back),
         ..default()
     };
     commands.spawn(PbrBundle {
@@ -131,6 +130,8 @@ fn apply_y_rotation(transforms: &mut Vec<Transform>, x: f32, y:f32, z: f32) {
     for t in transforms {
         t.rotate_around(y_rotation_point, Quat::from_rotation_y(rand_rotation));
     }
+
+    
 }
 
 // todo: clean up
@@ -157,8 +158,11 @@ fn generate_grass_geometry(verts: &Vec<Vec3>, vec_indices: Vec<u32>, mesh: &mut 
         uvs.push(*uv);
     }
 
+    let colors: Vec<[f32; 4]> = generate_vertex_colors(&positions);
+
     mesh.set_indices(Some(indices));
     mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, colors);
     mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
     mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
 }
@@ -176,6 +180,13 @@ fn update_grass(
     let mesh = meshes.get_mut(mesh_handle).unwrap();
     let perlin = perlin.get_single_mut().unwrap();
     apply_wind(mesh, grass, perlin, time);
+}
+
+// fast vertex coloring func, just a poc. Ideally would use relative y of grass blade
+fn generate_vertex_colors(positions: &Vec<[f32; 3]>) -> Vec<[f32; 4]> {
+    positions.iter().map(|[x,y,z]| {
+        [0.03* *y + 0.07,0.128,0.106 * -*y, 1.]
+    }).collect()
 }
 
 fn apply_wind(mesh: &mut Mesh, grass: &Grass, perlin: &PerlinNoiseEntity, time: f64) {

@@ -7,16 +7,12 @@ pub const TERRAIN_SEED: u32 = 127;
 #[derive(Component)]
 pub struct PerlinNoiseEntity {
     pub wind: Perlin,
-    pub grass_height: Perlin,
-    pub terrain: Perlin
 }
 
 impl PerlinNoiseEntity {
     pub fn new() -> Self {
         PerlinNoiseEntity {
             wind: Perlin::new(WIND_SEED),
-            grass_height: Perlin::new(GRASS_HEIGHT_SEED),
-            terrain: Perlin::new(TERRAIN_SEED)
         }
     }
 }
@@ -25,6 +21,10 @@ pub fn setup_perlin(mut commands: Commands) {
     commands.spawn(
         PerlinNoiseEntity::new()
     );
+}
+
+pub fn grass_perlin() -> Perlin {
+    Perlin::new(GRASS_HEIGHT_SEED)
 }
 
 pub struct PerlinPlugin;

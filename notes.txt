@@ -6,6 +6,9 @@
     - Direct control of grass height vs grass scale factor
 * Player object
     - movement + camera control
+* Queries
+    - Queries cannot conflict -> Had the Camera controller query Transforms, as well as the Player controller, and it was not happy. Had to put camera logic in player logic.
+        * will need to build out design according to this limitation
 
 ## Longer term concerns
 * Grass should have density reduced based on distance from player object

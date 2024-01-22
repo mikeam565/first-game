@@ -1,7 +1,7 @@
 mod entities;
 mod util;
 
-use bevy::{prelude::*, pbr::{CascadeShadowConfigBuilder, NotShadowCaster, DirectionalLightShadowMap}, core_pipeline::{tonemapping::Tonemapping, bloom::{BloomSettings, BloomCompositeMode}}, diagnostic::{LogDiagnosticsPlugin, FrameTimeDiagnosticsPlugin}};
+use bevy::{prelude::*, pbr::DirectionalLightShadowMap, diagnostic::{LogDiagnosticsPlugin, FrameTimeDiagnosticsPlugin}};
 use bevy_atmosphere::prelude::*;
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use crate::entities as ent;
@@ -21,8 +21,8 @@ fn main() {
         .add_plugins((
             DefaultPlugins,
             WorldInspectorPlugin::new(),
-            LogDiagnosticsPlugin::default(),
-            FrameTimeDiagnosticsPlugin::default(),
+            // LogDiagnosticsPlugin::default(),
+            // FrameTimeDiagnosticsPlugin::default(),
             AtmospherePlugin,
             util::camera::CameraPlugin,
             util::lighting::LightingPlugin,

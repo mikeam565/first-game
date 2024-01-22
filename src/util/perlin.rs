@@ -4,6 +4,7 @@ use noise::Perlin;
 pub const WIND_SEED: u32 = 0;
 pub const GRASS_HEIGHT_SEED: u32 = 1;
 pub const TERRAIN_SEED: u32 = 127;
+
 #[derive(Component)]
 pub struct PerlinNoiseEntity {
     pub wind: Perlin,

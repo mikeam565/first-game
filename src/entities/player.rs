@@ -1,14 +1,18 @@
-use std::f32::consts::{PI, TAU};
+use std::{f32::consts::{PI, TAU}, ptr::read};
 
 use bevy::prelude::*;
-use crate::entities as ent;
+use bevy_rapier3d::prelude::*;
+use crate::{entities as ent, util::{camera::setup_camera, gravity::{GRAVITY_DIR, GRAVITY_ACC}}};
 
-const SPEED: f32 = 10.0;
+const SPEED: f32 = 5.0;
 const ROTATION_SPEED: f32 = 0.3;
-const FIRE_RATE: f32 = 1.0;
+const FIRE_RATE: f32 = 0.5;
 const PLAYER_HEIGHT: f32 = 3.0;
+const PLAYER_WIDTH: f32 = 1.0;
+const JUMP_HEIGHT: f32 = 20.0;
+const RUN_COEFF: f32 = 3.0;
 
-#[derive(Reflect, Component, Default)]
+#[derive(Reflect, Component, Default, Debug)]
 #[reflect(Component)]
 pub struct Player {
     shooting_timer: Timer
@@ -19,14 +23,21 @@ pub fn setup_player(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
+    let transform = Transform::from_xyz(-5.0, PLAYER_HEIGHT+0.5, 0.0);
+    let mesh = Mesh::from(shape::Box::new(PLAYER_WIDTH, PLAYER_HEIGHT, PLAYER_WIDTH));
     commands.spawn(PbrBundle {
-        mesh: meshes.add(Mesh::from(shape::Box::new(1.0, PLAYER_HEIGHT, 1.0))),
+        mesh: meshes.add(mesh.clone()),
         material: materials.add(Color::rgb_u8(124, 144, 255).into()),
-        transform: Transform::from_xyz(0.0, PLAYER_HEIGHT/2.0, 0.0),
+        transform: transform.clone(),
         ..default()
     })
-    .insert(Player { shooting_timer: Timer::from_seconds(FIRE_RATE, TimerMode::Repeating)})
+    .insert(RigidBody::KinematicPositionBased)
+    .insert(Collider::cuboid(PLAYER_WIDTH/2.0, PLAYER_HEIGHT/2.0, PLAYER_WIDTH/2.0))
+    .insert(KinematicCharacterController::default())
+    .insert(Player { shooting_timer: Timer::from_seconds(FIRE_RATE, TimerMode::Repeating) })
     .insert(Name::new("Player"));
+
+    commands.spawn(setup_camera(transform));
 }
 
 fn player_movement(
@@ -35,48 +46,79 @@ fn player_movement(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut set: ParamSet<(
-        Query<(&mut Player, &mut Transform)>,
+        Query<(&mut Player, &mut Transform, &mut KinematicCharacterController)>,
         Query<(&Camera, &mut Transform)>
     )>,
     enemies: Query<&GlobalTransform, With<ent::enemy::Enemy>>,
     time: Res<Time>
 ) {
-    let mut original_player_pos = Transform::default();
-    let mut new_player_pos = Transform::default();
-    let mut rotation = 0.;
+    let base_movement = GRAVITY_ACC*GRAVITY_DIR*time.delta_seconds();
+    let mut movement = Vec3::ZERO;
 
-    for (mut player, mut plyr_trans) in set.p0().iter_mut() {
-        original_player_pos = plyr_trans.clone();
+    for (mut player, plyr_trans, mut controller) in set.p0().iter_mut() {
+        
+        // shooting
         player.shooting_timer.tick(time.delta());
         if player.shooting_timer.just_finished() {
             let mut spawn_transform = plyr_trans
                 .with_rotation(Quat::from_rotation_y(-PI / 2.0));
-            spawn_transform.translation.y += PLAYER_HEIGHT/2.;
+            spawn_transform.translation.y += PLAYER_HEIGHT/2. + 0.5;
 
             ent::projectiles::basic_projectile(&mut commands, &mut meshes, &mut materials, &enemies, spawn_transform);
         }
+
+        // movement
         if keys.pressed(KeyCode::W) {
-            let forward = plyr_trans.rotation * -Vec3::Z * SPEED * time.delta_seconds();
-            plyr_trans.translation += forward;
+            movement = movement + plyr_trans.rotation * -Vec3::Z * SPEED * time.delta_seconds();
         }
         if keys.pressed(KeyCode::S) {
-            let forward = plyr_trans.rotation * Vec3::Z * SPEED * time.delta_seconds();
-            plyr_trans.translation += forward;
+            movement = movement + plyr_trans.rotation * Vec3::Z * SPEED * time.delta_seconds();
         }
         if keys.pressed(KeyCode::A) {
-            let forward = plyr_trans.rotation * -Vec3::X * SPEED * time.delta_seconds();
-            plyr_trans.translation += forward;
+            movement = movement + plyr_trans.rotation * -Vec3::X * SPEED * time.delta_seconds();
         }
         if keys.pressed(KeyCode::D) {
-            let forward = plyr_trans.rotation * Vec3::X * SPEED * time.delta_seconds();
-            plyr_trans.translation += forward;
+            movement = movement + plyr_trans.rotation * Vec3::X * SPEED * time.delta_seconds();
         }
+
         if keys.pressed(KeyCode::ShiftLeft) {
-            plyr_trans.translation.y += SPEED*time.delta_seconds();
+            movement = movement * RUN_COEFF;
         }
-        if keys.pressed(KeyCode::ControlLeft) {
-            plyr_trans.translation.y -= SPEED*time.delta_seconds();
-        }
+
+        // // Creative mode flying. Removes gravity effect
+        // if keys.pressed(KeyCode::ShiftLeft) {
+        //     movement = movement + JUMP_HEIGHT*time.delta_seconds()*Vec3::Y - base_movement;
+        // }
+        // if keys.pressed(KeyCode::ControlLeft) {
+        //     movement = movement + JUMP_HEIGHT*time.delta_seconds()*-Vec3::Y - base_movement;
+        // }
+
+        controller.translation = Some(base_movement + movement);        
+    }
+}
+
+// fn read_result_system(controllers: Query<(Entity, &KinematicCharacterControllerOutput)>) {
+
+fn read_result_system(
+    mut commands: Commands,
+    keys: Res<Input<KeyCode>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut set: ParamSet<(
+        Query<(&mut Player, &mut Transform, &mut KinematicCharacterControllerOutput)>,
+        Query<&mut Transform, With<Camera>>
+    )>,
+    // enemies: Query<(&mut ent::enemy::Health, &mut ), With<ent::enemy::Enemy>>,
+    time: Res<Time>
+) {
+    let mut new_player_trans = Transform::default();
+    let mut effective_trans = Vec3::ZERO;
+    let mut rotation = 0.;
+
+    for (player, mut plyr_trans, ctrlr_output) in set.p0().iter_mut() {
+        // println!("Entity {:?} moved by {:?} and touches the ground: {:?}", player, ctrlr_output.effective_translation, ctrlr_output.grounded);
+        effective_trans = ctrlr_output.effective_translation;
+        
         if keys.pressed(KeyCode::Q) {
             rotation = ROTATION_SPEED*TAU*time.delta_seconds();
             plyr_trans.rotate_y(rotation);
@@ -85,21 +127,21 @@ fn player_movement(
             rotation = -ROTATION_SPEED*TAU*time.delta_seconds();
             plyr_trans.rotate_y(rotation);
         }
-        new_player_pos = plyr_trans.clone();
+        new_player_trans = plyr_trans.clone();
     }
-    
-    let delta_trans = new_player_pos.translation - original_player_pos.translation;
-    let delta_rot = new_player_pos.rotation - original_player_pos.rotation;
 
-    println!("trans:{}, rot:{}", delta_trans, delta_rot);
-    
-    for (cam, mut cam_trans) in set.p1().iter_mut() {
-        if delta_trans != Vec3::ZERO {
-            cam_trans.translation += delta_trans;
+    for mut cam_trans in set.p1().iter_mut() {
+        // for third person
+        if effective_trans != Vec3::ZERO {
+            cam_trans.translation += effective_trans;
         }
     
-        cam_trans.rotate_around(new_player_pos.translation, Quat::from_rotation_y(rotation));
+        cam_trans.rotate_around(new_player_trans.translation, Quat::from_rotation_y(rotation));
+        // for top view
+        cam_trans.look_at(new_player_trans.translation, Vec3::Y);
     }
+
+    
 }
 
 pub struct PlayerPlugin;
@@ -108,5 +150,6 @@ impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, setup_player);
         app.add_systems(Update, player_movement);
+        app.add_systems(Update, read_result_system);
     }
 }

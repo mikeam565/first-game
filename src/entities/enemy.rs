@@ -1,9 +1,12 @@
 use std::f32::consts::PI;
 
 use bevy::prelude::*;
+use bevy_rapier3d::prelude::*;
 use crate::entities as ent;
 
 pub const ENEMY_HEIGHT: f32 = 3.0;
+const ENEMY_WIDTH: f32 = 1.0;
+const MASS: f32 = 10.0;
 
 #[derive(Reflect, Component, Default)]
 #[reflect(Component)]
@@ -19,12 +22,17 @@ pub fn setup_enemies(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
+    let mesh = Mesh::from(shape::Box::new(ENEMY_WIDTH, ENEMY_HEIGHT, ENEMY_WIDTH));
+    let collider_shape = &ComputedColliderShape::TriMesh;
     commands.spawn(PbrBundle {
-        mesh: meshes.add(Mesh::from(shape::Box::new(1.0, ENEMY_HEIGHT, 1.0))),
+        mesh: meshes.add(mesh.clone()),
         material: materials.add(Color::RED.into()),
-        transform: Transform::from_xyz(2.0, ENEMY_HEIGHT/2.0, -1.0),
+        transform: Transform::from_xyz(2.0, ENEMY_HEIGHT/2.0+10.0, -1.0),
         ..default()
     })
+    .insert(RigidBody::Dynamic)
+    .insert(Collider::cuboid(ENEMY_WIDTH/2.0,ENEMY_HEIGHT/2.0, ENEMY_WIDTH/2.0))
+    .insert(ColliderMassProperties::Mass(MASS))
     .insert(Enemy { name: String::from("BadGuy") })
     .insert(Health(100))
     .insert(Name::new("Enemy"));

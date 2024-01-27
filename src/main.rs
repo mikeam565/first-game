@@ -3,6 +3,7 @@ mod util;
 
 use bevy::{prelude::*, pbr::DirectionalLightShadowMap, diagnostic::{LogDiagnosticsPlugin, FrameTimeDiagnosticsPlugin}};
 use bevy_atmosphere::prelude::*;
+use bevy_rapier3d::prelude::*;
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use crate::entities as ent;
 
@@ -24,6 +25,8 @@ fn main() {
             // LogDiagnosticsPlugin::default(),
             // FrameTimeDiagnosticsPlugin::default(),
             AtmospherePlugin,
+            RapierPhysicsPlugin::<NoUserData>::default(),
+            RapierDebugRenderPlugin::default(),
             util::camera::CameraPlugin,
             util::lighting::LightingPlugin,
             util::perlin::PerlinPlugin,

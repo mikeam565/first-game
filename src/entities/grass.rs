@@ -183,11 +183,10 @@ fn update_grass(
 }
 
 fn generate_vertex_colors(positions: &Vec<[f32; 3]>, grass_offsets: &Vec<[f32; 3]>) -> Vec<[f32; 4]> {
-
     positions.iter().enumerate().map(|(i,[x,y,z])| {
         let [_, base_y, _] = grass_offsets.get(i).unwrap();
         let modified_y = *y - base_y;
-        [0.03*modified_y + 0.07,0.128,0.106 * -*y, 1.]
+        [0.03*modified_y + 0.07,0.128,0.106 * -modified_y, 1.]
     }).collect()
 }
 

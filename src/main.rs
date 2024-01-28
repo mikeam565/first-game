@@ -26,7 +26,7 @@ fn main() {
             // FrameTimeDiagnosticsPlugin::default(),
             AtmospherePlugin,
             RapierPhysicsPlugin::<NoUserData>::default(),
-            RapierDebugRenderPlugin::default(),
+            // RapierDebugRenderPlugin::default(),
             util::camera::CameraPlugin,
             util::lighting::LightingPlugin,
             util::perlin::PerlinPlugin,

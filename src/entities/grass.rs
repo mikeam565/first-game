@@ -182,7 +182,6 @@ fn update_grass(
     apply_wind(mesh, grass, perlin, time);
 }
 
-// fast vertex coloring func, just a poc. Ideally would use relative y of grass blade
 fn generate_vertex_colors(positions: &Vec<[f32; 3]>, grass_offsets: &Vec<[f32; 3]>) -> Vec<[f32; 4]> {
 
     positions.iter().enumerate().map(|(i,[x,y,z])| {

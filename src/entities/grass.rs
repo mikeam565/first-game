@@ -52,7 +52,7 @@ pub fn generate_grass(
             let rand1 = if GRASS_OFFSET!=0.0 {rng.gen_range(-GRASS_OFFSET..GRASS_OFFSET)} else {0.0};
             let rand2 = if GRASS_OFFSET!=0.0 {rng.gen_range(-GRASS_OFFSET..GRASS_OFFSET)} else {0.0};
             let x_offset = x * GRASS_SPACING + rand1;
-            let y = 0.0;
+            let y = 0.0; // for now we set to 0, eventually will be generated based off terrain y at that (x,z)
             let z_offset = z * GRASS_SPACING + rand2;
             let blade_height = GRASS_HEIGHT + (height_perlin.get([x_offset as f64, z_offset as f64]) as f32 * GRASS_HEIGHT_VARIATION_FACTOR);
             let (mut verts, mut indices) = generate_single_blade_verts(x_offset, y, z_offset, blade_number, blade_height);
@@ -65,7 +65,7 @@ pub fn generate_grass(
         }
     }
 
-    generate_grass_geometry(&all_verts, all_indices, &mut mesh);
+    generate_grass_geometry(&all_verts, all_indices, &mut mesh, &grass_offsets);
 
     let grass_material = StandardMaterial {
         base_color: Color::WHITE,
@@ -143,7 +143,7 @@ fn apply_curve(transforms: &mut Vec<Transform>, x: f32, y:f32, z: f32) {
     }
 }
 
-fn generate_grass_geometry(verts: &Vec<Vec3>, vec_indices: Vec<u32>, mesh: &mut Mesh) {
+fn generate_grass_geometry(verts: &Vec<Vec3>, vec_indices: Vec<u32>, mesh: &mut Mesh, grass_offsets: &Vec<[f32; 3]>) {
     let indices = mesh::Indices::U32(vec_indices);
 
     // for now, normals are same as verts, and UV is [1.0,1.0]
@@ -158,7 +158,7 @@ fn generate_grass_geometry(verts: &Vec<Vec3>, vec_indices: Vec<u32>, mesh: &mut 
         uvs.push(*uv);
     }
 
-    let colors: Vec<[f32; 4]> = generate_vertex_colors(&positions);
+    let colors: Vec<[f32; 4]> = generate_vertex_colors(&positions, grass_offsets);
 
     mesh.set_indices(Some(indices));
     mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
@@ -183,9 +183,12 @@ fn update_grass(
 }
 
 // fast vertex coloring func, just a poc. Ideally would use relative y of grass blade
-fn generate_vertex_colors(positions: &Vec<[f32; 3]>) -> Vec<[f32; 4]> {
-    positions.iter().map(|[x,y,z]| {
-        [0.03* *y + 0.07,0.128,0.106 * -*y, 1.]
+fn generate_vertex_colors(positions: &Vec<[f32; 3]>, grass_offsets: &Vec<[f32; 3]>) -> Vec<[f32; 4]> {
+
+    positions.iter().enumerate().map(|(i,[x,y,z])| {
+        let [_, base_y, _] = grass_offsets.get(i).unwrap();
+        let modified_y = *y - base_y;
+        [0.03*modified_y + 0.07,0.128,0.106 * -*y, 1.]
     }).collect()
 }
 

@@ -33,6 +33,8 @@ pub fn setup_enemies(
     .insert(RigidBody::Dynamic)
     .insert(Collider::cuboid(ENEMY_WIDTH/2.0,ENEMY_HEIGHT/2.0, ENEMY_WIDTH/2.0))
     .insert(ColliderMassProperties::Mass(MASS))
+    // .insert(ActiveEvents::COLLISION_EVENTS)
+
     .insert(Enemy { name: String::from("BadGuy") })
     .insert(Health(100))
     .insert(Name::new("Enemy"));

@@ -1,4 +1,4 @@
-use std::{f32::consts::{PI, TAU}, ptr::read};
+use std::f32::consts::{PI, TAU};
 
 use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
@@ -28,9 +28,9 @@ pub fn setup_player(
     commands.spawn(PbrBundle {
         mesh: meshes.add(mesh.clone()),
         material: materials.add(Color::rgb_u8(124, 144, 255).into()),
-        transform: transform.clone(),
         ..default()
     })
+    .insert(transform.clone())
     .insert(RigidBody::KinematicPositionBased)
     .insert(Collider::cuboid(PLAYER_WIDTH/2.0, PLAYER_HEIGHT/2.0, PLAYER_WIDTH/2.0))
     .insert(KinematicCharacterController::default())
@@ -60,9 +60,8 @@ fn player_movement(
         // shooting
         player.shooting_timer.tick(time.delta());
         if player.shooting_timer.just_finished() {
-            let mut spawn_transform = plyr_trans
-                .with_rotation(Quat::from_rotation_y(-PI / 2.0));
-            spawn_transform.translation.y += PLAYER_HEIGHT/2. + 0.5;
+            let mut spawn_transform = plyr_trans.clone();
+            spawn_transform.translation.y += PLAYER_HEIGHT/2. + 1.0;
 
             ent::projectiles::basic_projectile(&mut commands, &mut meshes, &mut materials, &enemies, spawn_transform);
         }

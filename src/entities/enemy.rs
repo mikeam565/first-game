@@ -27,7 +27,7 @@ pub fn setup_enemies(
     commands.spawn(PbrBundle {
         mesh: meshes.add(mesh.clone()),
         material: materials.add(Color::RED.into()),
-        transform: Transform::from_xyz(2.0, ENEMY_HEIGHT/2.0+10.0, -1.0),
+        transform: Transform::from_xyz(20.0, 200. + ENEMY_HEIGHT + 5., 20.0),
         ..default()
     })
     .insert(RigidBody::Dynamic)

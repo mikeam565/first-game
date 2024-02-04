@@ -5,7 +5,7 @@ use bevy_rapier3d::prelude::*;
 use crate::entities::player::Player;
 
 const CAMERA_SPEED: f32 = 10.0;
-const CAMERA_HEIGHT: f32 = 10.0;
+const CAMERA_HEIGHT: f32 = 6.0;
 
 pub fn setup_camera(transform: Transform) ->
 (bevy::prelude::Camera3dBundle, bevy_atmosphere::plugin::AtmosphereCamera, BloomSettings)
@@ -21,8 +21,7 @@ pub fn setup_camera(transform: Transform) ->
                 post_saturation: 1.5,
                 ..default()
             },
-            transform: Transform::from_xyz(0.0, CAMERA_HEIGHT, 12.0)
-            // transform: Transform::from_xyz(-19.0, 14.0, 10.0)
+            transform: Transform::from_xyz(10., 200. + CAMERA_HEIGHT*2.0, 24.)
                 .looking_at(transform.translation, Vec3::Y), // TODO: Want the camera spawning to be based off the player
             tonemapping: Tonemapping::TonyMcMapface, // 2. Using a tonemapper that desaturates to white is recommended
             ..default()

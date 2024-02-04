@@ -4,7 +4,7 @@ use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
 use crate::{entities as ent, util::{camera::setup_camera, gravity::{GRAVITY_DIR, GRAVITY_ACC}}};
 
-const SPEED: f32 = 5.0;
+const SPEED: f32 = 15.0;
 const ROTATION_SPEED: f32 = 0.3;
 const FIRE_RATE: f32 = 0.5;
 const PLAYER_HEIGHT: f32 = 3.0;
@@ -23,7 +23,7 @@ pub fn setup_player(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    let transform = Transform::from_xyz(-5.0, PLAYER_HEIGHT+0.5, 0.0);
+    let transform = Transform::from_xyz(5.0, 200. + PLAYER_HEIGHT + 5., 5.0);
     let mesh = Mesh::from(shape::Box::new(PLAYER_WIDTH, PLAYER_HEIGHT, PLAYER_WIDTH));
     commands.spawn(PbrBundle {
         mesh: meshes.add(mesh.clone()),
@@ -84,13 +84,13 @@ fn player_movement(
             movement = movement * RUN_COEFF;
         }
 
-        // // Creative mode flying. Removes gravity effect
-        // if keys.pressed(KeyCode::ShiftLeft) {
-        //     movement = movement + JUMP_HEIGHT*time.delta_seconds()*Vec3::Y - base_movement;
-        // }
-        // if keys.pressed(KeyCode::ControlLeft) {
-        //     movement = movement + JUMP_HEIGHT*time.delta_seconds()*-Vec3::Y - base_movement;
-        // }
+        // Creative mode flying. Removes gravity effect
+        if keys.pressed(KeyCode::ShiftLeft) {
+            movement = movement + JUMP_HEIGHT*time.delta_seconds()*Vec3::Y - base_movement;
+        }
+        if keys.pressed(KeyCode::ControlLeft) {
+            movement = movement + JUMP_HEIGHT*time.delta_seconds()*-Vec3::Y - base_movement;
+        }
 
         controller.translation = Some(base_movement + movement);        
     }
@@ -119,13 +119,15 @@ fn read_result_system(
         effective_trans = ctrlr_output.effective_translation;
         
         if keys.pressed(KeyCode::Q) {
-            rotation = ROTATION_SPEED*TAU*time.delta_seconds();
-            plyr_trans.rotate_y(rotation);
+            rotation += ROTATION_SPEED*TAU*time.delta_seconds();
         }
         if keys.pressed(KeyCode::E) {
-            rotation = -ROTATION_SPEED*TAU*time.delta_seconds();
+            rotation += -ROTATION_SPEED*TAU*time.delta_seconds();
+        }
+        if rotation != 0. {
             plyr_trans.rotate_y(rotation);
         }
+
         new_player_trans = plyr_trans.clone();
     }
 
@@ -137,7 +139,7 @@ fn read_result_system(
     
         cam_trans.rotate_around(new_player_trans.translation, Quat::from_rotation_y(rotation));
         // for top view
-        cam_trans.look_at(new_player_trans.translation, Vec3::Y);
+        cam_trans.look_to(new_player_trans.forward(), Vec3::Y);
     }
 
     

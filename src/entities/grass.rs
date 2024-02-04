@@ -11,10 +11,13 @@ const NUM_GRASS_X: u32 = 256;
 const NUM_GRASS_Y: u32 = 256;
 const GRASS_BLADE_VERTICES: u32 = 7;
 const GRASS_WIDTH: f32 = 0.08;
-const GRASS_HEIGHT: f32 = 2.0;
+const GRASS_HEIGHT: f32 = 3.0;
+const GRASS_BASE_COLOR_1: [f32;4] = [0.102,0.153,0.,1.];
+const GRASS_BASE_COLOR_2: [f32;4] = [0.,0.019,0.,1.];
+const GRASS_SECOND_COLOR: [f32;4] = [0.079,0.079,0.,1.];
 const GRASS_SCALE_FACTOR: f32 = 1.0;
 const GRASS_HEIGHT_VARIATION_FACTOR: f32 = 0.2;
-const GRASS_STRAIGHTNESS: f32 = 10.0; // for now, as opposed to a curve factor, just modifying denominator for curve calcs
+const GRASS_STRAIGHTNESS: f32 = 8.0; // for now, as opposed to a curve factor, just modifying denominator for curve calcs
 const GRASS_SPACING: f32 = 0.2;
 const GRASS_OFFSET: f32 = 0.1;
 const ENABLE_WIREFRAME: bool = false;
@@ -25,11 +28,14 @@ const WIND_LEAN: f32 = 0.0; // determines how already bent grass will be at 0 wi
 const CURVE_POWER: f32 = 1.0; // the linearity / exponentiality of the application/bend of the wind
 
 // Grass Component
-#[derive(Component,Clone)]
-struct Grass {
+#[derive(Resource)]
+struct GrassData {
     initial_vertices: Vec<Vec3>,
     initial_positions: Vec<[f32;3]>
 }
+
+#[derive(Component,Clone)]
+struct Grass;
 
 // Grass offsets component
 
@@ -70,9 +76,9 @@ pub fn generate_grass(
     let grass_material = StandardMaterial {
         base_color: Color::WHITE,
         double_sided: false,
-        perceptual_roughness: 0.1,
-        // diffuse_transmission: 0.5,
-        reflectance: 0.1,
+        perceptual_roughness: 1.0,
+        reflectance: 0.5,
+        diffuse_transmission: 0.6,
         cull_mode: Some(Face::Back),
         ..default()
     };
@@ -82,7 +88,8 @@ pub fn generate_grass(
         transform: Transform::from_xyz(-((NUM_GRASS_X/8) as f32), 0.0, -((NUM_GRASS_Y/8) as f32)).with_scale(Vec3::new(1.0,GRASS_SCALE_FACTOR,1.0)),
         ..default()
     })
-    .insert(Grass {
+    .insert(Grass {});
+    commands.insert_resource(GrassData {
         initial_vertices: all_verts,
         initial_positions: grass_offsets
     });
@@ -146,16 +153,16 @@ fn apply_curve(transforms: &mut Vec<Transform>, x: f32, y:f32, z: f32) {
 fn generate_grass_geometry(verts: &Vec<Vec3>, vec_indices: Vec<u32>, mesh: &mut Mesh, grass_offsets: &Vec<[f32; 3]>) {
     let indices = mesh::Indices::U32(vec_indices);
 
-    // for now, normals are same as verts, and UV is [1.0,1.0]
+    // for now, normals are same as verts, and UV is [0.0,0.0]
     let vertices: Vec<([f32;3],[f32;3],[f32;2])> = verts.iter().map(|v| { (v.to_array(), v.to_array(), [0.0,0.0])} ).collect();
 
     let mut positions = Vec::new();
     let mut normals = Vec::new();
-    let mut uvs = Vec::new();
+    // let mut uvs: Vec<[f32; 2]> = Vec::new();
     for (position, normal, uv) in vertices.iter() {
         positions.push(*position);
         normals.push(*normal);
-        uvs.push(*uv);
+        // uvs.push(*uv);
     }
 
     let colors: Vec<[f32; 4]> = generate_vertex_colors(&positions, grass_offsets);
@@ -164,33 +171,44 @@ fn generate_grass_geometry(verts: &Vec<Vec3>, vec_indices: Vec<u32>, mesh: &mut 
     mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
     mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, colors);
     mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
-    mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
+    // mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
 }
 
 fn update_grass(
-    mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-    mut grass: Query<(&Handle<Mesh>, &Grass)>,
+    mut grass: Query<&Handle<Mesh>, With<Grass>>,
+    grass_data: Res<GrassData>,
     mut perlin: Query<&PerlinNoiseEntity>,
     time: Res<Time>
 ) {
     let time = time.elapsed_seconds_f64();
-    let (mesh_handle, grass) = grass.get_single_mut().unwrap();
+    let mesh_handle = grass.get_single_mut().unwrap();
     let mesh = meshes.get_mut(mesh_handle).unwrap();
     let perlin = perlin.get_single_mut().unwrap();
-    apply_wind(mesh, grass, perlin, time);
+    apply_wind(mesh, grass_data.as_ref(), perlin, time);
 }
 
 fn generate_vertex_colors(positions: &Vec<[f32; 3]>, grass_offsets: &Vec<[f32; 3]>) -> Vec<[f32; 4]> {
     positions.iter().enumerate().map(|(i,[x,y,z])| {
         let [_, base_y, _] = grass_offsets.get(i).unwrap();
         let modified_y = *y - base_y;
-        [0.03*modified_y + 0.07,0.128,0.106 * -modified_y, 1.]
+        // [0.03*modified_y + 0.07,0.128,0.106 * -modified_y, 1.]
+        color_gradient_y_based(modified_y, GRASS_BASE_COLOR_2, GRASS_SECOND_COLOR)
     }).collect()
 }
 
-fn apply_wind(mesh: &mut Mesh, grass: &Grass, perlin: &PerlinNoiseEntity, time: f64) {
+// 
+fn color_gradient_y_based(y: f32, rgba1: [f32; 4], rgba2: [f32; 4]) -> [f32;4] {
+    let [r1, g1, b1, a1] = rgba1;
+    let [r2, g2, b2, a2] = rgba2;
+    let r = r1 + (r2-r1)*(y/GRASS_HEIGHT);
+    let g = g1 + (g2-g1)*(y/GRASS_HEIGHT);
+    let b = b1 + (b2-b1)*(y/GRASS_HEIGHT);
+    let a = a1 + (a2-a1)*(y/GRASS_HEIGHT);
+    [r, g, b, a]
+}
+
+fn apply_wind(mesh: &mut Mesh, grass: &GrassData, perlin: &PerlinNoiseEntity, time: f64) {
     let wind_perlin = perlin.wind;
     let pos_attr = mesh.attribute_mut(Mesh::ATTRIBUTE_POSITION).unwrap();
     let VertexAttributeValues::Float32x3(pos_attr) = pos_attr else {

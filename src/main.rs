@@ -11,19 +11,19 @@ fn main() {
     std::env::set_var("RUST_BACKTRACE", "1");
 
     App::new()
-        .insert_resource(AmbientLight {
-            brightness: 0.5,
-            color: Color::AZURE,
-            ..default()
-        })
+        // .insert_resource(AmbientLight {
+        //     brightness: 0.5,
+        //     color: Color::AZURE,
+        //     ..default()
+        // })
         .insert_resource(DirectionalLightShadowMap {
             size: 4096
         })
         .add_plugins((
             DefaultPlugins,
             WorldInspectorPlugin::new(),
-            // LogDiagnosticsPlugin::default(),
-            // FrameTimeDiagnosticsPlugin::default(),
+            LogDiagnosticsPlugin::default(),
+            FrameTimeDiagnosticsPlugin::default(),
             AtmospherePlugin,
             RapierPhysicsPlugin::<NoUserData>::default(),
             // RapierDebugRenderPlugin::default(),

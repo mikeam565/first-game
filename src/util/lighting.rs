@@ -20,11 +20,11 @@ fn setup_directional_light() -> DirectionalLightBundle {
         directional_light: DirectionalLight {
             color: Color::rgb(0.98, 0.95, 0.82),
             shadows_enabled: true,
-            illuminance: 64000_f32,
+            illuminance: 100000.0,
             ..default()
         },
         transform: Transform::from_xyz(0.0,0.0,0.0)
-            .looking_at(Vec3::new(0.2,-1.0,-1.0), Vec3::Y),
+            .looking_at(Vec3::new(-0.2,-1.0,-1.0), Vec3::Y),
         cascade_shadow_config,
         ..default()
     }

@@ -47,7 +47,7 @@ for d in 0..DEPTH {
             d_f32 * TILE_WIDTH
             ];
             positions.push(pos);
-            normals.push([0.0,1.0,0.0]);
+            normals.push(pos);
             uvs.push([w_f32 / TILE_WIDTH, d_f32 / TILE_WIDTH]);
         }
     }
@@ -69,6 +69,7 @@ for d in 0..DEPTH {
     mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
     mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
     mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
+    mesh.generate_tangents();
     
     let sampler_desc = ImageSamplerDescriptor {
         address_mode_u: ImageAddressMode::Repeat,
@@ -79,12 +80,14 @@ for d in 0..DEPTH {
         s.sampler = ImageSampler::Descriptor(sampler_desc.clone());
     };
 
-    let texture_handle = asset_server.load_with_settings("terrain/rocky_soil.png", settings);
+    let texture_handle = asset_server.load_with_settings("terrain/rocky_soil.png", settings.clone());
+    let normal_handle = asset_server.load_with_settings("terrain/rocky_soil_normal.png", settings);
     let terrain_material = StandardMaterial {
         base_color: Color::BISQUE,
         base_color_texture: Some(texture_handle.clone()),
+        normal_map_texture: Some(normal_handle.clone()),
         alpha_mode: AlphaMode::Opaque,
-        double_sided: false,
+        double_sided: true,
         perceptual_roughness: 1.0,
         reflectance: 0.4,
         cull_mode: Some(Face::Back),

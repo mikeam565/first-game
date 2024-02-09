@@ -7,10 +7,10 @@ use crate::util::perlin::{PerlinNoiseEntity, self};
 
 // Grass constants
 const GRASS_BLADES: u32 = 65536;
-const NUM_GRASS_X: u32 = 256;
-const NUM_GRASS_Y: u32 = 256;
-const GRASS_BLADE_VERTICES: u32 = 7;
-const GRASS_WIDTH: f32 = 0.08;
+const NUM_GRASS_X: u32 = 512;
+const NUM_GRASS_Y: u32 = 512;
+const GRASS_BLADE_VERTICES: u32 = 3;
+const GRASS_WIDTH: f32 = 0.16;
 const GRASS_HEIGHT: f32 = 3.0;
 const GRASS_BASE_COLOR_1: [f32;4] = [0.102,0.153,0.,1.];
 const GRASS_BASE_COLOR_2: [f32;4] = [0.,0.019,0.,1.];
@@ -97,17 +97,19 @@ pub fn generate_grass(
 }
 
 fn generate_single_blade_verts(x: f32, y: f32, z: f32, blade_number: u32, blade_height: f32) -> (Vec<Vec3>, Vec<u32>) {
+    // For grass with 7 vertices, uncomment t3-6, and uncomment indices
     let blade_number_shift = blade_number*GRASS_BLADE_VERTICES;
     // vertex transforms
     let t1 = Transform::from_xyz(x, y, z);
     let t2 = Transform::from_xyz(x+GRASS_WIDTH, y, z);
-    let t3 = Transform::from_xyz(x, y+blade_height/3.0, z);
-    let t4 = Transform::from_xyz(x+GRASS_WIDTH, y+blade_height/3.0, z);
-    let t5 = Transform::from_xyz(x, y+2.0*blade_height/3.0, z);
-    let t6 = Transform::from_xyz(x + GRASS_WIDTH, y+2.0*blade_height/3.0, z);
+    // let t3 = Transform::from_xyz(x, y+blade_height/3.0, z);
+    // let t4 = Transform::from_xyz(x+GRASS_WIDTH, y+blade_height/3.0, z);
+    // let t5 = Transform::from_xyz(x, y+2.0*blade_height/3.0, z);
+    // let t6 = Transform::from_xyz(x + GRASS_WIDTH, y+2.0*blade_height/3.0, z);
     let t7 = Transform::from_xyz(x+(GRASS_WIDTH/2.0), y+blade_height, z);
 
-    let mut transforms = vec![t1,t2,t3,t4,t5,t6,t7];
+    // let mut transforms = vec![t1,t2,t3,t4,t5,t6,t7];
+    let mut transforms = vec![t1,t2,t7];
     
     // // physical randomization of grass blades
     // rotate grass randomly around y
@@ -123,11 +125,11 @@ fn generate_single_blade_verts(x: f32, y: f32, z: f32, blade_number: u32, blade_
 
     let indices: Vec<u32> = vec![
         blade_number_shift+0, blade_number_shift+1, blade_number_shift+2,
-        blade_number_shift+2, blade_number_shift+1, blade_number_shift+3,
-        blade_number_shift+2, blade_number_shift+3, blade_number_shift+4,
-        blade_number_shift+4, blade_number_shift+2, blade_number_shift+3,
-        blade_number_shift+4, blade_number_shift+3, blade_number_shift+5,
-        blade_number_shift+4, blade_number_shift+5, blade_number_shift+6,
+        // blade_number_shift+2, blade_number_shift+1, blade_number_shift+3,
+        // blade_number_shift+2, blade_number_shift+3, blade_number_shift+4,
+        // blade_number_shift+4, blade_number_shift+2, blade_number_shift+3,
+        // blade_number_shift+4, blade_number_shift+3, blade_number_shift+5,
+        // blade_number_shift+4, blade_number_shift+5, blade_number_shift+6,
     ];
     (verts, indices)
 }

@@ -48,7 +48,7 @@ for d in 0..DEPTH {
             ];
             positions.push(pos);
             normals.push([0.0,1.0,0.0]);
-            uvs.push([w_f32 / WIDTH as f32, d_f32 / DEPTH as f32]);
+            uvs.push([w_f32 / TILE_WIDTH, d_f32 / TILE_WIDTH]);
         }
     }
     
@@ -81,7 +81,7 @@ for d in 0..DEPTH {
 
     let texture_handle = asset_server.load_with_settings("terrain/rocky_soil.png", settings);
     let terrain_material = StandardMaterial {
-        base_color: Color::WHITE,
+        base_color: Color::BISQUE,
         base_color_texture: Some(texture_handle.clone()),
         alpha_mode: AlphaMode::Opaque,
         double_sided: false,

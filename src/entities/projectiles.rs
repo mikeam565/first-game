@@ -102,7 +102,7 @@ fn projectile_system(
                 // println!("Collision event between {:?} and {:?} with flags {:?}", e1, e2, flags);
             },
             CollisionEvent::Started(e1, e2, flags) => {
-                println!("Collision event between {:?} and {:?} with flags {:?}", e1, e2, flags);
+                // println!("Collision event between {:?} and {:?} with flags {:?}", e1, e2, flags);
                 for entity in &entities {
                     if e1.index() == entity.index() {
                         commands.entity(*e1).despawn_recursive();
@@ -116,7 +116,7 @@ fn projectile_system(
 }
 
 fn aim(projectile: Vec3, dest: Vec3) -> Vec3 {
-    println!("Closest enemy identified at {}", dest);
+    // println!("Closest enemy identified at {}", dest);
     let compensation = enemy::ENEMY_HEIGHT;
     dest + Vec3::Y*compensation
 }

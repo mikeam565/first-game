@@ -21,7 +21,7 @@ pub fn setup_camera(transform: Transform) ->
                 post_saturation: 1.5,
                 ..default()
             },
-            transform: Transform::from_xyz(10., 200. + CAMERA_HEIGHT*2.0, 24.)
+            transform: Transform::from_xyz(10., 205. + CAMERA_HEIGHT*2.0, 24.)
                 .looking_at(transform.translation, Vec3::Y), // TODO: Want the camera spawning to be based off the player
             tonemapping: Tonemapping::TonyMcMapface, // 2. Using a tonemapper that desaturates to white is recommended
             ..default()

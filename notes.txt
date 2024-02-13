@@ -1,17 +1,19 @@
-## Short/Medium term
-* Grass
-    - Improve general lighting + normal mapping of grass (rounded normal)
-    - Improve the general API around grass
-    - Further grass ideas: cover a terrain with grass, better shadows (base of grass has hard edge, I think this feature would be called occlusion?), etc.
-    - Direct control of grass height vs grass scale factor
-* Player object
-    - movement + camera control
+## Small deliverables
+- Rounded normal for grass
+## Medium/Longer term
+* Dynamic grass (see also: Chunking system)
+    - Render grass only close to the player. De-render far from player
+* Chunking system (Primary objective)
+    - Now that I've implemented grass and terrain, I need a system that provides greater control over these and future terrain features
+    - This will be useful, for example, for saying eg: chunks within x chunks away are to be fully rendered, while grass on farther chunks is ignored, etc.
+    - example design: Trait EnvironmentElement with a function populate() that takes as args a mesh that it will be the child of
+        * allows for terrain, trees that depend on terrain, grass that depends on terrain and avoids trees (grass doesn't grow near trees), flowers that depend on trees, water that depends on terrain, etc.
+
+## Notes
 * Queries
     - Queries cannot conflict -> Had the Camera controller query Transforms, as well as the Player controller, and it was not happy. Had to put camera logic in player logic.
         * will need to build out design according to this limitation
 
-## Longer term concerns
-* Grass should have density reduced based on distance from player object
 
 # Various Links
 https://stackoverflow.com/questions/66677098/how-can-i-manually-create-meshes-in-bevy-with-vertices

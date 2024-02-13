@@ -57,14 +57,14 @@ fn player_movement(
 
     for (mut player, plyr_trans, mut controller) in set.p0().iter_mut() {
         
-        // shooting
-        player.shooting_timer.tick(time.delta());
-        if player.shooting_timer.just_finished() {
-            let mut spawn_transform = plyr_trans.clone();
-            spawn_transform.translation.y += PLAYER_HEIGHT/2. + 1.0;
+        // // shooting
+        // player.shooting_timer.tick(time.delta());
+        // if player.shooting_timer.just_finished() {
+        //     let mut spawn_transform = plyr_trans.clone();
+        //     spawn_transform.translation.y += PLAYER_HEIGHT/2. + 1.0;
 
-            ent::projectiles::basic_projectile(&mut commands, &mut meshes, &mut materials, &enemies, spawn_transform);
-        }
+        //     ent::projectiles::basic_projectile(&mut commands, &mut meshes, &mut materials, &enemies, spawn_transform);
+        // }
 
         // movement
         if keys.pressed(KeyCode::W) {
@@ -139,7 +139,8 @@ fn read_result_system(
     
         cam_trans.rotate_around(new_player_trans.translation, Quat::from_rotation_y(rotation));
         // for top view
-        cam_trans.look_to(new_player_trans.forward(), Vec3::Y);
+        let looking_dir = new_player_trans.forward() - Vec3::Y*0.2;
+        cam_trans.look_to(looking_dir, Vec3::Y);
     }
 
     

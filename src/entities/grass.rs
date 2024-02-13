@@ -1,4 +1,4 @@
-use std::f32::consts::PI;
+use crate::entities::terrain;
 use crate::{entities, util::perlin::sample_terrain_height};
 use bevy::{prelude::*, render::{render_resource::{PrimitiveTopology, Face}, mesh::{self, VertexAttributeValues}}, utils::HashMap};
 use noise::{Perlin, NoiseFn};
@@ -10,7 +10,7 @@ const GRASS_BLADES: u32 = 65536;
 const NUM_GRASS_X: u32 = 512;
 const NUM_GRASS_Y: u32 = 512;
 const GRASS_BLADE_VERTICES: u32 = 3;
-const GRASS_WIDTH: f32 = 0.16;
+const GRASS_WIDTH: f32 = 0.24;
 const GRASS_HEIGHT: f32 = 3.0;
 const GRASS_BASE_COLOR_1: [f32;4] = [0.102,0.153,0.,1.];
 const GRASS_BASE_COLOR_2: [f32;4] = [0.,0.019,0.,1.];
@@ -18,7 +18,7 @@ const GRASS_SECOND_COLOR: [f32;4] = [0.079,0.079,0.,1.];
 const GRASS_SCALE_FACTOR: f32 = 1.0;
 const GRASS_HEIGHT_VARIATION_FACTOR: f32 = 0.2;
 const GRASS_STRAIGHTNESS: f32 = 10.0; // for now, as opposed to a curve factor, just modifying denominator for curve calcs
-const GRASS_SPACING: f32 = 0.2;
+const GRASS_SPACING: f32 = 0.3;
 const GRASS_OFFSET: f32 = 0.1;
 const ENABLE_WIREFRAME: bool = false;
 const WIND_STRENGTH: f32 = 0.5;
@@ -62,13 +62,15 @@ pub fn generate_grass(
             let z_offset = z * GRASS_SPACING + rand2;
             let y = sample_terrain_height(&terrain_perlin, x_offset, z_offset) - 0.2; // minus small amount to avoid floating
             let blade_height = GRASS_HEIGHT + (height_perlin.get([x_offset as f64, z_offset as f64]) as f32 * GRASS_HEIGHT_VARIATION_FACTOR);
-            let (mut verts, mut indices) = generate_single_blade_verts(x_offset, y, z_offset, blade_number, blade_height);
-            for _ in 0..verts.len() {
-                grass_offsets.push([x_offset,y,z_offset]);
+            if y > - (terrain::BASE_LEVEL - terrain::WATER_LEVEL) {
+                let (mut verts, mut indices) = generate_single_blade_verts(x_offset, y, z_offset, blade_number, blade_height);
+                for _ in 0..verts.len() {
+                    grass_offsets.push([x_offset,y,z_offset]);
+                }
+                all_verts.append(&mut verts);
+                all_indices.append(&mut indices);
+                blade_number += 1;
             }
-            all_verts.append(&mut verts);
-            all_indices.append(&mut indices);
-            blade_number += 1;
         }
     }
 

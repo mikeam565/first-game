@@ -8,9 +8,11 @@ use crate::entities::{grass,util};
 use crate::util::perlin::{self, sample_terrain_height};
 use bevy_rapier3d::prelude::*;
 
-const WIDTH: usize = 64;
-const DEPTH: usize = 64;
+const WIDTH: usize = 128;
+const DEPTH: usize = 128;
 const TILE_WIDTH: f32 = 4.;
+pub const BASE_LEVEL: f32 = 200.;
+pub const WATER_LEVEL: f32 = 195.;
 
 #[derive(Component)]
 struct Terrain;
@@ -99,11 +101,28 @@ for d in 0..DEPTH {
     commands.spawn(PbrBundle {
         mesh: meshes.add(mesh.clone()),
         material: materials.add(terrain_material),
-        transform: Transform::from_xyz(0.0,200.,0.0),
+        transform: Transform::from_xyz(0.0,BASE_LEVEL,0.0),
         ..default()
     })
     .insert(Terrain)
     .insert(Collider::from_bevy_mesh(&mesh, &collider_shape).unwrap());
+
+    // placeholder water plane
+    commands.spawn( PbrBundle {
+        mesh: meshes.add(shape::Plane {
+            size: 1000.,
+            subdivisions: 1,
+        }.into()),
+        material: materials.add(StandardMaterial {
+            base_color: Color::BISQUE,
+            perceptual_roughness: 0.089,
+            diffuse_transmission: 0.7,
+            specular_transmission:1.0,
+            ..default()
+        }),
+        transform: Transform::from_xyz(0.0,WATER_LEVEL,0.0),
+        ..default()
+    });
 
 }
 

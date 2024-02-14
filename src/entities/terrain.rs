@@ -77,7 +77,7 @@ pub fn setup_terrain(
     commands.spawn(PbrBundle {
         mesh: meshes.add(mesh.clone()),
         material: materials.add(terrain_material),
-        transform: Transform::from_xyz(0.0,BASE_LEVEL,0.0),
+        transform: Transform::from_xyz(0.0,0.,0.0),
         ..default()
     })
     .insert(Terrain)

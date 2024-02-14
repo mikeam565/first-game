@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 use noise::{NoiseFn, Perlin};
-
+use crate::entities::terrain;
 pub const WIND_SEED: u32 = 0;
 pub const GRASS_HEIGHT_SEED: u32 = 1;
 pub const TERRAIN_SEED: u32 = 127;
@@ -23,7 +23,8 @@ impl PerlinNoiseEntity {
 }
 
 pub fn sample_terrain_height(terrain_perlin: &Perlin, x: f32, z: f32) -> f32 {
-    terrain_perlin.get([x as f64 / TERRAIN_SAMPLING_SMOOTHNESS, z as f64 / TERRAIN_SAMPLING_SMOOTHNESS]) as f32 * TERRAIN_HEIGHT_SCALE
+    terrain::BASE_LEVEL
+    + terrain_perlin.get([x as f64 / TERRAIN_SAMPLING_SMOOTHNESS, z as f64 / TERRAIN_SAMPLING_SMOOTHNESS]) as f32 * TERRAIN_HEIGHT_SCALE
     + terrain_perlin.get([z as f64 / 20., x as f64 / 20.]) as f32 * TERRAIN_BUMPINESS
     // + terrain_perlin.get([z as f64 / 5., x as f64 / 5.]) as f32 * TERRAIN_BUMPINESS/5.
 }

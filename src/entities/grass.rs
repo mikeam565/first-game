@@ -62,7 +62,7 @@ pub fn generate_grass(
             let z_offset = z * GRASS_SPACING + rand2;
             let y = sample_terrain_height(&terrain_perlin, x_offset, z_offset) - 0.2; // minus small amount to avoid floating
             let blade_height = GRASS_HEIGHT + (height_perlin.get([x_offset as f64, z_offset as f64]) as f32 * GRASS_HEIGHT_VARIATION_FACTOR);
-            if y > - (terrain::BASE_LEVEL - terrain::WATER_LEVEL) {
+            if y > terrain::WATER_LEVEL {
                 let (mut verts, mut indices) = generate_single_blade_verts(x_offset, y, z_offset, blade_number, blade_height);
                 for _ in 0..verts.len() {
                     grass_offsets.push([x_offset,y,z_offset]);
@@ -88,7 +88,7 @@ pub fn generate_grass(
     commands.spawn(PbrBundle {
         mesh: meshes.add(mesh),
         material: materials.add(grass_material),
-        transform: Transform::from_xyz(0.0,200.,0.0),
+        transform: Transform::from_xyz(0.0,0.,0.0),
         ..default()
     })
     .insert(Grass {});
@@ -148,10 +148,10 @@ fn apply_y_rotation(transforms: &mut Vec<Transform>, x: f32, y:f32, z: f32) {
 
 // todo: clean up
 fn apply_curve(transforms: &mut Vec<Transform>, x: f32, y:f32, z: f32) {
-    let curve_rotation_point = Vec3::new(x + thread_rng().gen_range(0..2) as f32 / 10.0, y - GRASS_HEIGHT, z + thread_rng().gen_range(0..2) as f32 / 10.0);
+    let curve_rotation_point = Vec3::new(x + thread_rng().gen_range(0..2) as f32 / 10.0, y, z + thread_rng().gen_range(0..2) as f32 / 10.0);
     let rand_curve = (thread_rng().gen_range(101..110) / 100) as f32;
     for t in transforms {
-        t.rotate_around(curve_rotation_point, Quat::from_rotation_z(rand_curve * (t.translation.y / (GRASS_HEIGHT*GRASS_STRAIGHTNESS))));
+        t.rotate_around(curve_rotation_point, Quat::from_rotation_z(rand_curve * ((t.translation.y - y) / (GRASS_HEIGHT*GRASS_STRAIGHTNESS))));
     }
 }
 

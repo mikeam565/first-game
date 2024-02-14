@@ -24,9 +24,10 @@ pub fn setup_terrain(
     mut materials: ResMut<Assets<StandardMaterial>>,
     asset_server: Res<AssetServer>,
 ) {
-    let plane_size = TILE_WIDTH + TILE_WIDTH*SUBDIVISIONS;
+    let plane_size = if SUBDIVISIONS>0 {TILE_WIDTH*SUBDIVISIONS} else {TILE_WIDTH};
+    let num_vertices: usize = (SUBDIVISIONS as usize + 2)*(SUBDIVISIONS as usize + 2);
     let height_map = perlin::terrain_perlin();
-    let mut uvs: Vec<[f32;2]> = vec![];
+    let mut uvs: Vec<[f32;2]> = Vec::with_capacity(num_vertices);
     let mut mesh: Mesh = bevy::prelude::shape::Plane {
         size: plane_size as f32,
         subdivisions: SUBDIVISIONS

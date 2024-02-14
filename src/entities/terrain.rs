@@ -40,7 +40,6 @@ pub fn setup_terrain(
     for i in 0..pos_attr.len() {
         let pos = pos_attr.get_mut(i).unwrap();
         pos[1] = sample_terrain_height(&height_map, pos[0], pos[2]);
-        // normals.push(pos.clone());
         uvs.push([pos[0]/(TILE_WIDTH as f32*TEXTURE_SCALE), pos[2]/(TILE_WIDTH as f32*TEXTURE_SCALE)]);
     };
 

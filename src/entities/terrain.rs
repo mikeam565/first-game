@@ -8,6 +8,7 @@ use crate::entities::{grass,util};
 use crate::util::perlin::{self, sample_terrain_height};
 use bevy_rapier3d::prelude::*;
 
+const PLANE_SIZE: f32 = 400.;
 const SUBDIVISIONS: u32 = 100;
 const TILE_WIDTH: u32 = 4; // how wide a tile should be
 const TEXTURE_SCALE: f32 = 3.;
@@ -24,12 +25,11 @@ pub fn setup_terrain(
     mut materials: ResMut<Assets<StandardMaterial>>,
     asset_server: Res<AssetServer>,
 ) {
-    let plane_size = if SUBDIVISIONS>0 {TILE_WIDTH*SUBDIVISIONS} else {TILE_WIDTH};
     let num_vertices: usize = (SUBDIVISIONS as usize + 2)*(SUBDIVISIONS as usize + 2);
     let height_map = perlin::terrain_perlin();
     let mut uvs: Vec<[f32;2]> = Vec::with_capacity(num_vertices);
     let mut mesh: Mesh = bevy::prelude::shape::Plane {
-        size: plane_size as f32,
+        size: PLANE_SIZE,
         subdivisions: SUBDIVISIONS
     }.into();
     // get positions

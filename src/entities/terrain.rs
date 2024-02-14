@@ -24,12 +24,9 @@ pub fn setup_terrain(
     mut materials: ResMut<Assets<StandardMaterial>>,
     asset_server: Res<AssetServer>,
 ) {
-
     let plane_size = TILE_WIDTH + TILE_WIDTH*SUBDIVISIONS;
-    let num_vertices = (SUBDIVISIONS + 2)*(SUBDIVISIONS + 2);
     let height_map = perlin::terrain_perlin();
     let mut uvs: Vec<[f32;2]> = vec![];
-    let mut normals: Vec<[f32;3]> = vec![];
     let mut mesh: Mesh = bevy::prelude::shape::Plane {
         size: plane_size as f32,
         subdivisions: SUBDIVISIONS
@@ -47,8 +44,7 @@ pub fn setup_terrain(
         uvs.push([pos[0]/(TILE_WIDTH as f32*TEXTURE_SCALE), pos[2]/(TILE_WIDTH as f32*TEXTURE_SCALE)]);
     };
 
-    mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs.clone());
-    mesh.insert_attribute(Mesh::ATTRIBUTE_UV_1, uvs);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
 
     let _ = mesh.generate_tangents();
     

@@ -4,7 +4,7 @@ use noise::{NoiseFn, Perlin};
 pub const WIND_SEED: u32 = 0;
 pub const GRASS_HEIGHT_SEED: u32 = 1;
 pub const TERRAIN_SEED: u32 = 127;
-const TERRAIN_HEIGHT_SCALE: f32 = 10.0;
+const TERRAIN_HEIGHT_SCALE: f32 = 15.0;
 const TERRAIN_SAMPLING_SMOOTHNESS: f64 = 100.;
 const TERRAIN_BUMPINESS: f32 = 2.0;
 

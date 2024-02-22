@@ -13,6 +13,12 @@
 * Queries
     - Queries cannot conflict -> Had the Camera controller query Transforms, as well as the Player controller, and it was not happy. Had to put camera logic in player logic.
         * will need to build out design according to this limitation
+* 2/21 Player deformation of grass
+    - tried out deforming grass through player object emitting entities with GrassDeformation components and doing calculations to see if a grass vertex exists close to the GrassDeformation entity, to deform it.
+    - Insights:
+        * Spawning these entities constantly whenever moving is (expectedly) terrible for performance. A better approach would be to spawn only when direction changes above a certain threshold, and deforming on the path
+        * timer similar to projectile timer can be used to slowly un-deform the grass back to normal condition
+        * Putting off until chunk based generation is complete, which makes me wonder how transitions between chunks would be handled for deformation
 
 
 # Various Links

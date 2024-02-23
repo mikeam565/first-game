@@ -46,13 +46,15 @@ pub fn update_terrain(
         if (player_trans.translation.z - terrain_trans.translation.z).abs() > PLANE_SIZE/2. {
             new_chunk_z = if player_trans.translation.z - terrain_trans.translation.z > 0. { terrain_trans.translation.z + PLANE_SIZE } else { terrain_trans.translation.z - PLANE_SIZE };
         }
-        // remove ContainsPlayer from terrain that no longer has the player in it
-        commands.get_entity(entity).unwrap().remove::<ContainsPlayer>();
-        // check if terrain chunk already exists here, insert ContainsPlayer component
-        if let Some(existing_terrain) = check_terrain_exists(&terrain_no_player, &new_chunk_x, &new_chunk_z) {
-            commands.get_entity(existing_terrain).unwrap().insert(ContainsPlayer);
-        } else { // if doesn't exist, spawn it
-            spawn_terrain_chunk(&mut commands, &mut meshes, &mut materials, &asset_server, new_chunk_x, new_chunk_z);
+        if new_chunk_x != terrain_trans.translation.x || new_chunk_z != terrain_trans.translation.z { // only check and generate terrain if new_chunk_x or new_chunk_z have been overwritten
+            // remove ContainsPlayer from terrain that no longer has the player in it
+            commands.get_entity(entity).unwrap().remove::<ContainsPlayer>();
+            // check if terrain chunk already exists here, insert ContainsPlayer component
+            if let Some(existing_terrain) = check_terrain_exists(&terrain_no_player, &new_chunk_x, &new_chunk_z) {
+                commands.get_entity(existing_terrain).unwrap().insert(ContainsPlayer);
+            } else { // if doesn't exist, spawn it
+                spawn_terrain_chunk(&mut commands, &mut meshes, &mut materials, &asset_server, new_chunk_x, new_chunk_z);
+            }
         }
     }
 }

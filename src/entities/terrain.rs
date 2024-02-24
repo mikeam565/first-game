@@ -31,9 +31,9 @@ pub fn update_terrain(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     asset_server: Res<AssetServer>,
-    terrain_no_player: Query<(Entity,&Transform,&Handle<Mesh>), (Without<ContainsPlayer>,With<Terrain>)>,
-    mut terrain_with_player: Query<(Entity,&Transform, &Handle<Mesh>), (With<ContainsPlayer>,With<Terrain>)>,
-    player: Query<&Transform, With<player::Player>>,
+    mut terrain_no_player: Query<(Entity,&mut Transform,&Handle<Mesh>), (Without<ContainsPlayer>,With<Terrain>)>,
+    mut terrain_with_player: Query<(Entity,&mut Transform, &Handle<Mesh>), (With<ContainsPlayer>,With<Terrain>)>,
+    player: Query<&Transform, (With<player::Player>,Without<Terrain>)>,
 ) {
     if terrain_with_player.is_empty() { // scene start
         // spawn chunk with player in it
@@ -48,35 +48,17 @@ pub fn update_terrain(
     } else { // main update logic
         let (entity, terrain_trans, mh) = terrain_with_player.get_single_mut().unwrap();
         let player_trans = player.get_single().unwrap();
-        let mut new_chunk_x = terrain_trans.translation.x;
-        let mut new_chunk_z = terrain_trans.translation.z;
-        let mut del_chunk_x = -1.;
-        let mut del_chunk_z = -1.;
+        let mut delta: Option<Vec3> = None;
 
-        // Determine if player has left the ContainsPlayer chunk
-        if (player_trans.translation.x - terrain_trans.translation.x).abs() > PLANE_SIZE/2. {
-            if player_trans.translation.x - terrain_trans.translation.x > 0. {
-                new_chunk_x = terrain_trans.translation.x + PLANE_SIZE;
-                del_chunk_x = terrain_trans.translation.x - PLANE_SIZE;
-            } else {
-                new_chunk_x = terrain_trans.translation.x - PLANE_SIZE;
-                del_chunk_x = terrain_trans.translation.x + PLANE_SIZE;
-            }
-        }
-        if (player_trans.translation.z - terrain_trans.translation.z).abs() > PLANE_SIZE/2. {
-            if player_trans.translation.z - terrain_trans.translation.z > 0. {
-                new_chunk_z = terrain_trans.translation.z + PLANE_SIZE;
-                del_chunk_z = terrain_trans.translation.z - PLANE_SIZE;
-            } else {
-                new_chunk_z = terrain_trans.translation.z - PLANE_SIZE;
-                del_chunk_z = terrain_trans.translation.z + PLANE_SIZE;
-            }            
+        // determine player triggering terrain refresh
+        if (player_trans.translation.x - terrain_trans.translation.x).abs() > PLANE_SIZE/4. || (player_trans.translation.z - terrain_trans.translation.z).abs() > PLANE_SIZE/4. {
+            delta = Some(player_trans.translation - terrain_trans.translation);
         }
 
         // if they have, regenerate the terrain
-        if new_chunk_x != terrain_trans.translation.x || new_chunk_z != terrain_trans.translation.z {
-            println!("Player has exited ContainsPlayer terrain");
-            regenerate_terrain(&mut commands, &mut meshes, &mut materials, &asset_server, &terrain_no_player, &terrain_with_player, new_chunk_x, new_chunk_z, del_chunk_x, del_chunk_z);
+        if let Some(delta) = delta {
+            println!("Player has triggered terrain regeneration");
+            regenerate_terrain(&mut commands, &mut meshes, &mut materials, &asset_server, &mut terrain_no_player, &mut terrain_with_player, delta);
         }
     }
 }
@@ -86,48 +68,30 @@ fn regenerate_terrain(
     meshes: &mut ResMut<Assets<Mesh>>,
     materials: &mut ResMut<Assets<StandardMaterial>>,
     asset_server: &Res<AssetServer>,
-    terrain_no_player: &Query<(Entity,&Transform, &Handle<Mesh>), (Without<ContainsPlayer>, With<Terrain>)>,
-    terrain_w_player: &Query<(Entity,&Transform, &Handle<Mesh>), (With<ContainsPlayer>, With<Terrain>)>,
-    new_chunk_x: f32,
-    new_chunk_z: f32,
-    del_chunk_x: f32,
-    del_chunk_z: f32,
+    terrain_no_player: &mut Query<(Entity,&mut Transform, &Handle<Mesh>), (Without<ContainsPlayer>, With<Terrain>)>,
+    terrain_w_player: &mut Query<(Entity,&mut Transform, &Handle<Mesh>), (With<ContainsPlayer>, With<Terrain>)>,
+    delta: Vec3
 ) {
-    // map for preventing double generation
-    let mut exists_map: std::collections::HashMap<(i32,i32),bool> = std::collections::HashMap::with_capacity(8);
+    let collider_shape = ComputedColliderShape::TriMesh;
 
-    // from the chunks that didn't have the player
-    for (no_pl_ent, no_pl_trans, mh) in terrain_no_player.iter() {
-        if no_pl_trans.translation.distance(Vec3::new(new_chunk_x, 0., new_chunk_z))<1. { // update the chunk that now contains the player
-            commands.get_entity(no_pl_ent).unwrap().insert(ContainsPlayer);
-            let mesh = meshes.get_mut(mh).unwrap();
-            let new_mesh = &mut generate_terrain_mesh(no_pl_trans.translation.x, no_pl_trans.translation.z, SUBDIVISIONS_LEVEL_1);
-            *mesh = new_mesh.clone();
-        } else if (no_pl_trans.translation.x - del_chunk_x).abs() < 1. || (no_pl_trans.translation.z - del_chunk_z).abs() < 1. { // despawn chunks that are too far
-            commands.get_entity(no_pl_ent).unwrap().despawn_recursive();
-        } else { // mark coordinates where chunk already exists
-            exists_map.insert((no_pl_trans.translation.x as i32, no_pl_trans.translation.z as i32), true);
-        }
-    }
-
-    // update old player chunk and add in map
-    for (pl_ent, pl_trans, mh) in terrain_w_player.iter() {
-        let mut old_chunk = commands.get_entity(pl_ent).unwrap();
-        old_chunk.remove::<ContainsPlayer>();
+    // shift over and regen terrain that didn't have the player
+    for (no_pl_ent, mut no_pl_trans, mh) in terrain_no_player.iter_mut() {
+        no_pl_trans.translation = no_pl_trans.translation + delta;
+        no_pl_trans.translation.y = 0.;
         let mesh = meshes.get_mut(mh).unwrap();
-        let new_mesh = &mut generate_terrain_mesh(pl_trans.translation.x, pl_trans.translation.z, SUBDIVISIONS_LEVEL_2);
+        let new_mesh = &mut generate_terrain_mesh(no_pl_trans.translation.x, no_pl_trans.translation.z, SUBDIVISIONS_LEVEL_2);
         *mesh = new_mesh.clone();
-
-        exists_map.insert((pl_trans.translation.x as i32, pl_trans.translation.z as i32), true);
+        commands.get_entity(no_pl_ent).unwrap().insert(Collider::from_bevy_mesh(&mesh, &collider_shape).unwrap());
     }
 
-    // spawn terrain wherever we need that doesn't already have
-    for (dx,dz) in [(1,0),(-1,0),(0,1),(0,-1),(1,1),(1,-1),(-1,1),(-1,-1)] {
-        let calc_x = dx as f32 * PLANE_SIZE + new_chunk_x;
-        let calc_z = dz as f32 * PLANE_SIZE + new_chunk_z;
-        if !exists_map.contains_key(&(calc_x as i32, calc_z as i32)) {
-            spawn_terrain_chunk(commands, meshes, materials, &asset_server, calc_x, calc_z, false, SUBDIVISIONS_LEVEL_2);
-        }
+    // shift over and regen terrain that does have the player
+    for (pl_ent, mut pl_trans, mh) in terrain_w_player.iter_mut() {
+        pl_trans.translation = pl_trans.translation + delta;
+        pl_trans.translation.y = 0.;
+        let mesh = meshes.get_mut(mh).unwrap();
+        let new_mesh = &mut generate_terrain_mesh(pl_trans.translation.x, pl_trans.translation.z, SUBDIVISIONS_LEVEL_1);
+        *mesh = new_mesh.clone();
+        commands.get_entity(pl_ent).unwrap().insert(Collider::from_bevy_mesh(&mesh, &collider_shape).unwrap());
     }
 }
 
@@ -242,7 +206,7 @@ fn update_terrain_colors(
 }
 
 fn generate_terrain_mesh(x: f32, z: f32, subdivisions: u32) -> Mesh {
-    let num_vertices: usize = (SUBDIVISIONS_LEVEL_1 as usize + 2)*(SUBDIVISIONS_LEVEL_1 as usize + 2);
+    let num_vertices: usize = (subdivisions as usize + 2)*(subdivisions as usize + 2);
     let height_map = perlin::terrain_perlin();
     let mut uvs: Vec<[f32;2]> = Vec::with_capacity(num_vertices);
     let mut mesh: Mesh = bevy::prelude::shape::Plane {

@@ -8,10 +8,10 @@ use crate::entities::{grass,util,player};
 use crate::util::perlin::{self, sample_terrain_height};
 use bevy_rapier3d::prelude::*;
 
-pub const PLANE_SIZE: f32 = 100.;
-const SUBDIVISIONS_LEVEL_1: u32 = 20;
-const SUBDIVISIONS_LEVEL_2: u32 = 5;
-const SUBDIVISIONS_LEVEL_3: u32 = 1;
+pub const PLANE_SIZE: f32 = 1000.;
+const SUBDIVISIONS_LEVEL_1: u32 = 200;
+const SUBDIVISIONS_LEVEL_2: u32 = 15;
+const SUBDIVISIONS_LEVEL_3: u32 = 2;
 const TILE_WIDTH: u32 = 4; // how wide a tile should be
 const TEXTURE_SCALE: f32 = 3.;
 pub const BASE_LEVEL: f32 = 200.;
@@ -139,7 +139,7 @@ fn spawn_terrain_chunk(
     let texture_handle = asset_server.load_with_settings("terrain/rocky_soil.png", settings.clone());
     let normal_handle = asset_server.load_with_settings("terrain/rocky_soil_normal.png", settings);
     let terrain_material = StandardMaterial {
-        base_color: if contains_player { Color::WHITE } else { Color::RED },
+        base_color: if contains_player { Color::WHITE } else { Color::BISQUE },
         base_color_texture: Some(texture_handle.clone()),
         normal_map_texture: Some(normal_handle.clone()),
         alpha_mode: AlphaMode::Opaque,

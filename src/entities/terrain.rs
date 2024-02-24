@@ -188,23 +188,6 @@ fn spawn_water_plane(commands: &mut Commands, meshes: &mut ResMut<Assets<Mesh>>,
         });
 }
 
-fn update_terrain_colors(
-    mut materials: ResMut<Assets<StandardMaterial>>,
-    terrain_no_player: Query<(Entity,&Transform, &Handle<StandardMaterial>), (Without<ContainsPlayer>,With<Terrain>)>,
-    terrain_with_player: Query<(Entity,&Transform, &Handle<StandardMaterial>), (With<ContainsPlayer>,With<Terrain>)>,
-) {
-    terrain_no_player.iter().for_each(|(e,t,mh)| {
-        let mat = materials.get_mut(mh).unwrap();
-        mat.base_color = Color::RED;
-    });
-
-    terrain_with_player.iter().for_each(|(e,t,mh)| {
-        let mat = materials.get_mut(mh).unwrap();
-        mat.base_color = Color::WHITE;
-    })
-
-}
-
 fn generate_terrain_mesh(x: f32, z: f32, subdivisions: u32) -> Mesh {
     let num_vertices: usize = (subdivisions as usize + 2)*(subdivisions as usize + 2);
     let height_map = perlin::terrain_perlin();
@@ -223,6 +206,7 @@ fn generate_terrain_mesh(x: f32, z: f32, subdivisions: u32) -> Mesh {
         let pos = pos_attr.get_mut(i).unwrap();
         pos[1] = sample_terrain_height(&height_map, x + pos[0], z + pos[2]);
         uvs.push([pos[0]/(TILE_WIDTH as f32*TEXTURE_SCALE), pos[2]/(TILE_WIDTH as f32*TEXTURE_SCALE)]);
+        // Todo: Terrain texture should stay in-place as terrain is updated from player traversal
     };
 
     mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
@@ -232,14 +216,10 @@ fn generate_terrain_mesh(x: f32, z: f32, subdivisions: u32) -> Mesh {
     mesh
 }
 
-#[derive(Component)]
-struct RegenTerrain;
-
 pub struct TerrainPlugin;
 
 impl Plugin for TerrainPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Update, update_terrain);
-        app.add_systems(PostUpdate, update_terrain_colors);
     }
 }

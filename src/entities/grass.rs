@@ -7,7 +7,7 @@ use crate::util::perlin::{PerlinNoiseEntity, self};
 
 // Grass constants
 const GRASS_TILE_SIZE: f32 = 10.;
-const NUM_GRASS: u32 = 128; // number of grass blades in one row of a tile
+const NUM_GRASS: u32 = 64; // number of grass blades in one row of a tile
 const GRASS_BLADE_VERTICES: u32 = 3;
 const GRASS_WIDTH: f32 = 0.24;
 const GRASS_HEIGHT: f32 = 3.0;

@@ -1,25 +1,17 @@
 ## Small deliverables
 - Rounded normal for grass
 ## Medium/Longer term
-* Dynamic grass (see also: Chunking system)
-    - Render grass only close to the player. De-render far from player
-* Chunking system (Primary objective)
-    - Now that I've implemented grass and terrain, I need a system that provides greater control over these and future terrain features
-    - This will be useful, for example, for saying eg: chunks within x chunks away are to be fully rendered, while grass on farther chunks is ignored, etc.
-    - example design: Trait EnvironmentElement with a function populate() that takes as args a mesh that it will be the child of
-        * allows for terrain, trees that depend on terrain, grass that depends on terrain and avoids trees (grass doesn't grow near trees), flowers that depend on trees, water that depends on terrain, etc.
+* Performance Optimization
+    - Recently implemented: Dynamic terrain resolution (I want extreme view-distances for this game)
+    - Still need:
+        * Dynamic grass. This is critical for what I was going for in this project
 
 ## Notes
 * Queries
     - Queries cannot conflict -> Had the Camera controller query Transforms, as well as the Player controller, and it was not happy. Had to put camera logic in player logic.
-        * will need to build out design according to this limitation
+        * UPDATE: Use Without filters. Bevy uses these to determine if there is possible overlap in queries.
 * 2/21 Player deformation of grass
     - tried out deforming grass through player object emitting entities with GrassDeformation components and doing calculations to see if a grass vertex exists close to the GrassDeformation entity, to deform it.
     - Insights:
-        * Spawning these entities constantly whenever moving is (expectedly) terrible for performance. A better approach would be to spawn only when direction changes above a certain threshold, and deforming on the path
+        * Spawning these entities constantly whenever moving is (expectedly) terrible for performance. A better approach would be to spawn only as points for a path
         * timer similar to projectile timer can be used to slowly un-deform the grass back to normal condition
-        * Putting off until chunk based generation is complete, which makes me wonder how transitions between chunks would be handled for deformation
-
-
-# Various Links
-https://stackoverflow.com/questions/66677098/how-can-i-manually-create-meshes-in-bevy-with-vertices

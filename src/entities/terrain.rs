@@ -15,7 +15,7 @@ const SUBDIVISIONS_LEVEL_3: u32 = 2;
 const TILE_WIDTH: u32 = 4; // how wide a tile should be
 const TEXTURE_SCALE: f32 = 3.;
 pub const BASE_LEVEL: f32 = 200.;
-pub const WATER_LEVEL: f32 = 195.;
+pub const WATER_LEVEL: f32 = 189.;
 
 // struct for marking terrain
 #[derive(Component)]
@@ -36,13 +36,14 @@ pub fn update_terrain(
     player: Query<&Transform, (With<player::Player>,Without<Terrain>)>,
 ) {
     if terrain_with_player.is_empty() { // scene start
-        // spawn chunk with player in it
+        // spawn chunk at player
+        let player_trans = player.get_single().unwrap().translation;
         spawn_terrain_chunk(&mut commands, &mut meshes, &mut materials, &asset_server, 0., 0., true, SUBDIVISIONS_LEVEL_1);
         // spawn chunks without player in them
-        for (dx,dy) in [(1,0),(-1,0),(0,1),(0,-1),(1,1),(1,-1),(-1,1),(-1,-1)] {
+        for (dx,dz) in [(1,0),(-1,0),(0,1),(0,-1),(1,1),(1,-1),(-1,1),(-1,-1)] {
             let calc_dx = dx as f32 * PLANE_SIZE;
-            let calc_dy = dy as f32 * PLANE_SIZE;
-            spawn_terrain_chunk(&mut commands, &mut meshes, &mut materials, &asset_server, 0. + calc_dx, 0. + calc_dy, false, SUBDIVISIONS_LEVEL_2);
+            let calc_dz = dz as f32 * PLANE_SIZE;
+            spawn_terrain_chunk(&mut commands, &mut meshes, &mut materials, &asset_server, player_trans.x + calc_dx, player_trans.z + calc_dz, false, SUBDIVISIONS_LEVEL_2);
         }
         spawn_water_plane(&mut commands, &mut meshes, &mut materials);
     } else { // main update logic

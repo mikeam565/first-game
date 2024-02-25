@@ -26,7 +26,9 @@ pub fn setup_camera(transform: Transform) ->
             tonemapping: Tonemapping::TonyMcMapface, // 2. Using a tonemapper that desaturates to white is recommended
             ..default()
         },
-        AtmosphereCamera::default(),
+        AtmosphereCamera {
+            ..default()
+        },
         BloomSettings {
             intensity: 0.1,
             // composite_mode: BloomCompositeMode::Additive,

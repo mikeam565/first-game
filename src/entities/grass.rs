@@ -6,10 +6,10 @@ use rand::{thread_rng, Rng};
 use crate::util::perlin::{PerlinNoiseEntity, self};
 
 // Grass constants
-const GRASS_TILE_SIZE: f32 = 10.;
-const NUM_GRASS: u32 = 64; // number of grass blades in one row of a tile
+const GRASS_TILE_SIZE: f32 = 100.;
+const NUM_GRASS: u32 = 256; // number of grass blades in one row of a tile
 const GRASS_BLADE_VERTICES: u32 = 3;
-const GRASS_WIDTH: f32 = 0.24;
+const GRASS_WIDTH: f32 = 0.3;
 const GRASS_HEIGHT: f32 = 3.0;
 const GRASS_BASE_COLOR_1: [f32;4] = [0.102,0.153,0.,1.];
 const GRASS_BASE_COLOR_2: [f32;4] = [0.,0.019,0.,1.];
@@ -18,7 +18,7 @@ const GRASS_SCALE_FACTOR: f32 = 1.0;
 const GRASS_HEIGHT_VARIATION_FACTOR: f32 = 0.2;
 const GRASS_STRAIGHTNESS: f32 = 10.0; // for now, as opposed to a curve factor, just modifying denominator for curve calcs
 const GRASS_SPACING: f32 = 0.3;
-const GRASS_OFFSET: f32 = 0.0;
+const GRASS_OFFSET: f32 = 0.1;
 const ENABLE_WIREFRAME: bool = false;
 const WIND_STRENGTH: f32 = 0.5;
 const WIND_SPEED: f64 = 0.5;
@@ -54,8 +54,8 @@ pub fn generate_grass(
     let mut blade_number = 0;
     let height_perlin = perlin::grass_perlin();
     let terrain_perlin = perlin::terrain_perlin();
-    let start_x = - GRASS_TILE_SIZE/2.;
-    let start_z = - GRASS_TILE_SIZE/2.;
+    let start_x = spawn_x - GRASS_TILE_SIZE/2.;
+    let start_z = spawn_z - GRASS_TILE_SIZE/2.;
     for i in 0..density {
         let x = start_x + i as f32 * GRASS_TILE_SIZE / density as f32;
         for j in 0..density {
@@ -64,7 +64,7 @@ pub fn generate_grass(
             let rand2 = if GRASS_OFFSET!=0.0 {rng.gen_range(-GRASS_OFFSET..GRASS_OFFSET)} else {0.0};
             let x_offset = x + rand1;
             let z_offset = z + rand2;
-            let y = sample_terrain_height(&terrain_perlin, x_offset + spawn_x, z_offset + spawn_z) - 0.2; // minus small amount to avoid floating
+            let y = sample_terrain_height(&terrain_perlin, x_offset, z_offset) - 0.2; // minus small amount to avoid floating
             let blade_height = GRASS_HEIGHT + (height_perlin.get([(x_offset + spawn_x) as f64, (z_offset + spawn_z) as f64]) as f32 * GRASS_HEIGHT_VARIATION_FACTOR);
             if y > terrain::WATER_LEVEL {
                 let (mut verts, mut indices) = generate_single_blade_verts(x_offset, y, z_offset, blade_number, blade_height);
@@ -96,13 +96,6 @@ pub fn generate_grass(
         transform: Transform::from_xyz(0.,0.,0.),
         ..default()
     };
-
-    // commands.spawn(bundle)
-    // .insert(Grass {})
-    // .insert(GrassData {
-    //     initial_vertices: all_verts,
-    //     initial_positions: grass_offsets
-    // });
 
     (
         bundle,
@@ -197,16 +190,38 @@ fn generate_grass_geometry(verts: &Vec<Vec3>, vec_indices: Vec<u32>, mesh: &mut 
 }
 
 fn update_grass(
+    mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
     mut grass: Query<(&Handle<Mesh>, &GrassData), With<Grass>>,
     perlin: Res<PerlinNoiseEntity>,
-    time: Res<Time>
+    time: Res<Time>,
+    player: Query<(Entity,&Transform),With<entities::player::Player>>,
 ) {
-    let time = time.elapsed_seconds_f64();
-    for (mh,grass_data) in grass.iter() {
-        let mesh = meshes.get_mut(mh).unwrap();
-        apply_wind(mesh, grass_data, &perlin, time);
+    if grass.is_empty() {
+        let (plyr_e, plyr_trans) = player.get_single().unwrap();
+        let x = plyr_trans.translation.x;
+        let z = plyr_trans.translation.z;
+        // main tile
+        let (main_mat, main_grass, main_data) = generate_grass(&mut commands, &mut meshes, &mut materials, x, z, NUM_GRASS);
+        commands.spawn(main_mat).insert(main_grass).insert(main_data);
+        // surrounding tiles
+        for (dx,dz) in [(1,0),(-1,0),(0,1),(0,-1),(1,1),(1,-1),(-1,1),(-1,-1)] {
+            let calc_dx = dx as f32 * GRASS_TILE_SIZE;
+            let calc_dz = dz as f32 * GRASS_TILE_SIZE;
+            let (mat, grass, data) = generate_grass(&mut commands, &mut meshes, &mut materials, x + calc_dx, z + calc_dz, NUM_GRASS);
+            commands.spawn(mat).insert(grass).insert(data);
+        }
+        
+    } else {
+        // simulate wind
+        let elapsed_time = time.elapsed_seconds_f64();
+        for (mh,grass_data) in grass.iter() {
+            let mesh = meshes.get_mut(mh).unwrap();
+            apply_wind(mesh, grass_data, &perlin, elapsed_time);
+        }
     }
+
 }
 
 fn generate_vertex_colors(positions: &Vec<[f32; 3]>, grass_offsets: &Vec<[f32; 3]>) -> Vec<[f32; 4]> {
@@ -255,21 +270,10 @@ fn sample_noise(perlin: &Perlin, x: f32, z: f32, time: f64) -> f32 {
     WIND_LEAN + perlin.get([WIND_SPEED * time + (x as f64/WIND_CONSISTENCY), WIND_SPEED * time + (z as f64/WIND_CONSISTENCY)]) as f32
 }
 
-fn add_grass(
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-    asset_server: Res<AssetServer>,
-) {
-    let (mat, grass, data) = generate_grass(&mut commands, &mut meshes, &mut materials, 0., 0., NUM_GRASS);
-    commands.spawn(mat).insert(grass).insert(data);
-}
-
 pub struct GrassPlugin;
 
 impl Plugin for GrassPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, add_grass);
         app.add_systems(Update, update_grass);
     }
 }

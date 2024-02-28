@@ -1,1 +1,4 @@
 /target
+trace*
+flamegraph.svg
+weird_coloring_maybe_normal.png

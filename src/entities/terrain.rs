@@ -8,9 +8,9 @@ use crate::entities::{grass,util,player};
 use crate::util::perlin::{self, sample_terrain_height};
 use bevy_rapier3d::prelude::*;
 
-pub const PLANE_SIZE: f32 = 1000.;
-const SUBDIVISIONS_LEVEL_1: u32 = 200;
-const SUBDIVISIONS_LEVEL_2: u32 = 15;
+pub const PLANE_SIZE: f32 = 3000.;
+const SUBDIVISIONS_LEVEL_1: u32 = 256;
+const SUBDIVISIONS_LEVEL_2: u32 = 64;
 const SUBDIVISIONS_LEVEL_3: u32 = 2;
 const TILE_WIDTH: u32 = 4; // how wide a tile should be
 const TEXTURE_SCALE: f32 = 3.;

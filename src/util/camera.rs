@@ -6,6 +6,7 @@ use crate::entities::player::Player;
 
 const CAMERA_SPEED: f32 = 10.0;
 const CAMERA_HEIGHT: f32 = 6.0;
+const VIEW_DISTANCE: f32 = 99999.;
 
 pub fn setup_camera(transform: Transform) ->
 (bevy::prelude::Camera3dBundle, bevy_atmosphere::plugin::AtmosphereCamera, BloomSettings)
@@ -22,8 +23,12 @@ pub fn setup_camera(transform: Transform) ->
                 ..default()
             },
             transform: Transform::from_xyz(10., 205. + CAMERA_HEIGHT*2.0, 24.)
-                .looking_at(transform.translation, Vec3::Y), // TODO: Want the camera spawning to be based off the player
+                .looking_at(transform.translation, Vec3::Y),
             tonemapping: Tonemapping::TonyMcMapface, // 2. Using a tonemapper that desaturates to white is recommended
+            projection: bevy::prelude::Projection::Perspective(PerspectiveProjection {
+                far: VIEW_DISTANCE,
+                ..default()
+            }),
             ..default()
         },
         AtmosphereCamera {

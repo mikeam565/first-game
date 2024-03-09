@@ -7,6 +7,7 @@ pub const TERRAIN_SEED: u32 = 127;
 const TERRAIN_HEIGHT_SCALE: f32 = 15.0;
 const TERRAIN_SAMPLING_SMOOTHNESS: f64 = 100.;
 const TERRAIN_BUMPINESS: f32 = 2.0;
+const MOUNTAIN_HEIGHTS: f32 = 256.;
 
 #[derive(Resource)]
 pub struct PerlinNoiseEntity {
@@ -24,9 +25,10 @@ impl PerlinNoiseEntity {
 
 pub fn sample_terrain_height(terrain_perlin: &Perlin, x: f32, z: f32) -> f32 {
     terrain::BASE_LEVEL
-    + terrain_perlin.get([x as f64 / TERRAIN_SAMPLING_SMOOTHNESS, z as f64 / TERRAIN_SAMPLING_SMOOTHNESS]) as f32 * TERRAIN_HEIGHT_SCALE
-    + terrain_perlin.get([z as f64 / 20., x as f64 / 20.]) as f32 * TERRAIN_BUMPINESS
-    // + terrain_perlin.get([z as f64 / 5., x as f64 / 5.]) as f32 * TERRAIN_BUMPINESS/5.
+    + terrain_perlin.get([x as f64 / TERRAIN_SAMPLING_SMOOTHNESS, z as f64 / TERRAIN_SAMPLING_SMOOTHNESS]) as f32 * TERRAIN_HEIGHT_SCALE // hills
+    + terrain_perlin.get([z as f64 / 16., x as f64 / 16.]) as f32 * TERRAIN_BUMPINESS // finer detail
+    + terrain_perlin.get([z as f64 / 2048., x as f64 / 2048.]) as f32 * MOUNTAIN_HEIGHTS // mountains
+
 }
 
 pub fn setup_perlin(mut commands: Commands) {

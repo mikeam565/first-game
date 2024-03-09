@@ -13,7 +13,8 @@ const SUBDIVISIONS_LEVEL_1: u32 = 256;
 const SUBDIVISIONS_LEVEL_2: u32 = 64;
 const SUBDIVISIONS_LEVEL_3: u32 = 2;
 const TILE_WIDTH: u32 = 4; // how wide a tile should be
-const TEXTURE_SCALE: f32 = 3.;
+const TEXTURE_SCALE: f32 = 7.;
+const WATER_TEXTURE_SCALE: f32 = 20.;
 pub const BASE_LEVEL: f32 = 200.;
 pub const WATER_LEVEL: f32 = 189.;
 
@@ -45,7 +46,7 @@ pub fn update_terrain(
             let calc_dz = dz as f32 * PLANE_SIZE;
             spawn_terrain_chunk(&mut commands, &mut meshes, &mut materials, &asset_server, player_trans.x + calc_dx, player_trans.z + calc_dz, false, SUBDIVISIONS_LEVEL_2);
         }
-        spawn_water_plane(&mut commands, &mut meshes, &mut materials);
+        spawn_water_plane(&mut commands, &mut meshes, &mut materials, &asset_server);
     } else { // main update logic
         let (entity, terrain_trans, mh) = terrain_with_player.get_single_mut().unwrap();
         let player_trans = player.get_single().unwrap();
@@ -170,23 +171,52 @@ fn spawn_terrain_chunk(
     
 }
 
-fn spawn_water_plane(commands: &mut Commands, meshes: &mut ResMut<Assets<Mesh>>, materials: &mut ResMut<Assets<StandardMaterial>>) {
-        // placeholder water plane
-        commands.spawn( PbrBundle {
-            mesh: meshes.add(shape::Plane {
-                size: 2000.,
-                subdivisions: 1,
-            }.into()),
-            material: materials.add(StandardMaterial {
-                base_color: Color::BISQUE,
-                perceptual_roughness: 0.089,
-                diffuse_transmission: 0.7,
-                specular_transmission:1.0,
-                ..default()
-            }),
-            transform: Transform::from_xyz(0.0,WATER_LEVEL,0.0),
+fn spawn_water_plane(
+    commands: &mut Commands,
+    meshes: &mut ResMut<Assets<Mesh>>,
+    materials: &mut ResMut<Assets<StandardMaterial>>,
+    asset_server: &Res<AssetServer>,
+) {
+    let mut water_mesh: Mesh = shape::Plane {
+        size: 2000.,
+        subdivisions: 2,
+    }.into();
+
+    let pos_attr = water_mesh.attribute(Mesh::ATTRIBUTE_POSITION).unwrap();
+    let VertexAttributeValues::Float32x3(pos_attr) = pos_attr else {
+        panic!("Unexpected vertex format, expected Float32x3");
+    };
+
+    let water_uvs: Vec<[f32; 2]> = pos_attr.iter().map(|[x,y,z]| { [x / WATER_TEXTURE_SCALE, z / WATER_TEXTURE_SCALE]}).collect();
+
+    water_mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, water_uvs);
+
+    let _ = water_mesh.generate_tangents();
+
+    let sampler_desc = ImageSamplerDescriptor {
+        address_mode_u: ImageAddressMode::Repeat,
+        address_mode_v: ImageAddressMode::Repeat,
+        ..default()
+    };
+    let settings = move |s: &mut ImageLoaderSettings| {
+        s.sampler = ImageSampler::Descriptor(sampler_desc.clone());
+    };
+    let normal_handle = asset_server.load_with_settings("water_normal.png", settings);
+    // placeholder water plane
+    commands.spawn( PbrBundle {
+        mesh: meshes.add(water_mesh),
+        material: materials.add(StandardMaterial {
+            base_color: Color::rgb(0.,96./256.,134./256.),
+            perceptual_roughness: 0.089,
+            metallic: 0.2,
+            // diffuse_transmission: 0.7,
+            // specular_transmission:1.0,
+            normal_map_texture: Some(normal_handle.clone()),
             ..default()
-        });
+        }),
+        transform: Transform::from_xyz(0.0,WATER_LEVEL,0.0),
+        ..default()
+    });
 }
 
 fn generate_terrain_mesh(x: f32, z: f32, subdivisions: u32) -> Mesh {

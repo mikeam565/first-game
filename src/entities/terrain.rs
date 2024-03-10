@@ -9,14 +9,15 @@ use crate::util::perlin::{self, sample_terrain_height};
 use bevy_rapier3d::prelude::*;
 
 pub const PLANE_SIZE: f32 = 3000.;
-const SUBDIVISIONS_LEVEL_1: u32 = 256;
-const SUBDIVISIONS_LEVEL_2: u32 = 64;
+const SUBDIVISIONS_LEVEL_1: u32 = 512;
+const SUBDIVISIONS_LEVEL_2: u32 = 128;
 const SUBDIVISIONS_LEVEL_3: u32 = 2;
 const TILE_WIDTH: u32 = 4; // how wide a tile should be
 const TEXTURE_SCALE: f32 = 7.;
 const WATER_TEXTURE_SCALE: f32 = 20.;
 pub const BASE_LEVEL: f32 = 200.;
 pub const WATER_LEVEL: f32 = 189.;
+const WATER_SCROLL_SPEED: f32 = 0.001;
 
 // struct for marking terrain
 #[derive(Component)]
@@ -171,6 +172,9 @@ fn spawn_terrain_chunk(
     
 }
 
+#[derive(Component)]
+struct Water;
+
 fn spawn_water_plane(
     commands: &mut Commands,
     meshes: &mut ResMut<Assets<Mesh>>,
@@ -178,8 +182,8 @@ fn spawn_water_plane(
     asset_server: &Res<AssetServer>,
 ) {
     let mut water_mesh: Mesh = shape::Plane {
-        size: 2000.,
-        subdivisions: 2,
+        size: PLANE_SIZE*3.,
+        subdivisions: 4,
     }.into();
 
     let pos_attr = water_mesh.attribute(Mesh::ATTRIBUTE_POSITION).unwrap();
@@ -207,16 +211,18 @@ fn spawn_water_plane(
         mesh: meshes.add(water_mesh),
         material: materials.add(StandardMaterial {
             base_color: Color::rgb(0.,96./256.,134./256.),
-            perceptual_roughness: 0.089,
+            perceptual_roughness: 0.7,
             metallic: 0.2,
-            // diffuse_transmission: 0.7,
-            // specular_transmission:1.0,
+            reflectance: 0.45,
+            diffuse_transmission: 0.0,
+            specular_transmission:0.3,
             normal_map_texture: Some(normal_handle.clone()),
+            flip_normal_map_y: true,
             ..default()
         }),
         transform: Transform::from_xyz(0.0,WATER_LEVEL,0.0),
         ..default()
-    });
+    }).insert(Water);
 }
 
 fn generate_terrain_mesh(x: f32, z: f32, subdivisions: u32) -> Mesh {
@@ -247,10 +253,32 @@ fn generate_terrain_mesh(x: f32, z: f32, subdivisions: u32) -> Mesh {
     mesh
 }
 
+fn update_water(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    asset_server: Res<AssetServer>,
+    mut water: Query<(Entity,&Handle<Mesh>), (With<Water>)>,
+) {
+    let Ok((water_ent, water_mesh_handle)) = water.get_single_mut() else {
+        return
+    };
+    let water_mesh = meshes.get_mut(water_mesh_handle).unwrap();
+    let water_uvs = water_mesh.attribute_mut(Mesh::ATTRIBUTE_UV_0).unwrap();
+    let VertexAttributeValues::Float32x2(uv_attr) = water_uvs else {
+        panic!("Unexpected vertex format, expected Float32x3");
+    };
+    for [x,y] in uv_attr.iter_mut() {
+        *x = *x + WATER_SCROLL_SPEED;
+        *y = *y + WATER_SCROLL_SPEED;
+    }
+}
+
 pub struct TerrainPlugin;
 
 impl Plugin for TerrainPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Update, update_terrain);
+        app.add_systems(Update, update_water);
     }
 }

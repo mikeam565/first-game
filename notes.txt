@@ -18,3 +18,5 @@
         * Spawning these entities constantly whenever moving is (expectedly) terrible for performance. A better approach would be to spawn only as points for a path
         * timer similar to projectile timer can be used to slowly un-deform the grass back to normal condition
 * Use Bevy's ecs Added filter for one-time modifications
+* The weird lighting behavior on grass was because I was defining the normals as just the relative (x,z) from the spawn x and z. This caused lighting to be calculated identically across grass patches.
+    The solution was to include the spawn x and z in the normals

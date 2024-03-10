@@ -6,8 +6,8 @@ use rand::{thread_rng, Rng};
 use crate::util::perlin::{PerlinNoiseEntity, self};
 
 // Grass constants
-const GRASS_TILE_SIZE: f32 = 100.;
-const NUM_GRASS: u32 = 256; // number of grass blades in one row of a tile
+const GRASS_TILE_SIZE: f32 = 512.;
+const NUM_GRASS: u32 = 2048; // number of grass blades in one row of a tile
 const GRASS_BLADE_VERTICES: u32 = 3;
 const GRASS_WIDTH: f32 = 0.3;
 const GRASS_HEIGHT: f32 = 3.0;
@@ -78,14 +78,13 @@ pub fn generate_grass(
         }
     }
 
-    generate_grass_geometry(&all_verts, all_indices, &mut mesh, &grass_offsets);
+    generate_grass_geometry(&all_verts, all_indices, &mut mesh, &grass_offsets, &spawn_x, &spawn_z);
 
     let grass_material = StandardMaterial {
         base_color: Color::WHITE,
         double_sided: false,
         perceptual_roughness: 1.0,
         reflectance: 0.5,
-        diffuse_transmission: 0.6,
         cull_mode: Some(Face::Back),
         ..default()
     };
@@ -165,11 +164,11 @@ fn apply_curve(transforms: &mut Vec<Transform>, x: f32, y:f32, z: f32) {
     }
 }
 
-fn generate_grass_geometry(verts: &Vec<Vec3>, vec_indices: Vec<u32>, mesh: &mut Mesh, grass_offsets: &Vec<[f32; 3]>) {
+fn generate_grass_geometry(verts: &Vec<Vec3>, vec_indices: Vec<u32>, mesh: &mut Mesh, grass_offsets: &Vec<[f32; 3]>, spawn_x: &f32, spawn_z: &f32) {
     let indices = mesh::Indices::U32(vec_indices);
 
-    // for now, normals are same as verts, and UV is [0.0,0.0]
-    let vertices: Vec<([f32;3],[f32;3],[f32;2])> = verts.iter().map(|v| { (v.to_array(), v.to_array(), [0.0,0.0])} ).collect();
+    // normals need the spawn_x and spawn_z added in for lighting to properly work
+    let vertices: Vec<([f32;3],[f32;3],[f32;2])> = verts.iter().map(|v| { (v.to_array(), [v.x + spawn_x, v.y, v.z + spawn_z], [0.0,0.0])} ).collect();
 
     let mut positions = Vec::with_capacity(verts.capacity());
     let mut normals = Vec::with_capacity(verts.capacity());
@@ -187,6 +186,8 @@ fn generate_grass_geometry(verts: &Vec<Vec3>, vec_indices: Vec<u32>, mesh: &mut 
     mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, colors);
     mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
     // mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
+
+    let _ = mesh.generate_tangents();
 }
 
 fn update_grass(
@@ -214,15 +215,15 @@ fn update_grass(
         }
         
     } else {
-        // simulate wind
-        let elapsed_time = time.elapsed_seconds_f64();
-        let (plyr_e, plyr_trans) = player.get_single().unwrap();
-        for (mh,grass_data, grass_trans, visibility) in grass.iter() {
-            if visibility.get() && plyr_trans.translation.xz().distance(grass_trans.translation.xz()) < 1.4*GRASS_TILE_SIZE { // TODO: calculate the distance based off the tile size
-                let mesh = meshes.get_mut(mh).unwrap();
-                apply_wind(mesh, grass_data, &perlin, elapsed_time);
-            }
-        }
+        // // simulate wind
+        // let elapsed_time = time.elapsed_seconds_f64();
+        // let (plyr_e, plyr_trans) = player.get_single().unwrap();
+        // for (mh,grass_data, grass_trans, visibility) in grass.iter() {
+        //     if visibility.get() && plyr_trans.translation.xz().distance(grass_trans.translation.xz()) < 1.4*GRASS_TILE_SIZE { // TODO: calculate the distance based off the tile size
+        //         let mesh = meshes.get_mut(mh).unwrap();
+        //         apply_wind(mesh, grass_data, &perlin, elapsed_time);
+        //     }
+        // }
     }
 
 }

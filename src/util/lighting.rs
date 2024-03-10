@@ -11,8 +11,8 @@ pub fn setup_lighting(mut commands: Commands) {
 fn setup_directional_light() -> DirectionalLightBundle {
     // Configure a properly scaled cascade shadow map for this scene (defaults are too large, mesh units are in km)
     let cascade_shadow_config = CascadeShadowConfigBuilder {
-        first_cascade_far_bound: 2.0,
-        maximum_distance: 200.0,
+        // first_cascade_far_bound: 2.0,
+        maximum_distance: 10000.0,
         ..default()
     }.build();
     // Sun

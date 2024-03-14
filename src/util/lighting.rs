@@ -20,7 +20,7 @@ fn setup_directional_light() -> DirectionalLightBundle {
         directional_light: DirectionalLight {
             color: Color::rgb(0.98, 0.95, 0.82),
             shadows_enabled: true,
-            illuminance: 100000.0,
+            illuminance: 30000.0,
             ..default()
         },
         transform: Transform::from_xyz(0.0,0.0,0.0)

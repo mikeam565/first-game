@@ -6,8 +6,8 @@ use rand::{thread_rng, Rng};
 use crate::util::perlin::{PerlinNoiseEntity, self};
 
 // Grass constants
-const GRASS_TILE_SIZE: f32 = 512.;
-const NUM_GRASS: u32 = 2048; // number of grass blades in one row of a tile
+const GRASS_TILE_SIZE: f32 = 100.;
+const NUM_GRASS: u32 = 256; // number of grass blades in one row of a tile
 const GRASS_BLADE_VERTICES: u32 = 3;
 const GRASS_WIDTH: f32 = 0.3;
 const GRASS_HEIGHT: f32 = 3.0;
@@ -66,7 +66,7 @@ pub fn generate_grass(
             let z_offset = z + rand2;
             let y = sample_terrain_height(&terrain_perlin, spawn_x + x_offset, spawn_z + z_offset) - 0.2; // minus small amount to avoid floating
             let blade_height = GRASS_HEIGHT + (height_perlin.get([(spawn_x + x_offset) as f64, (spawn_z + z_offset) as f64]) as f32 * GRASS_HEIGHT_VARIATION_FACTOR);
-            if y > terrain::WATER_LEVEL {
+            if y > terrain::HEIGHT_TEMPERATE_START && y < terrain::HEIGHT_TEMPERATE_END {
                 let (mut verts, mut indices) = generate_single_blade_verts(x_offset, y, z_offset, blade_number, blade_height);
                 for _ in 0..verts.len() {
                     grass_offsets.push([spawn_x + x_offset,y,spawn_z + z_offset]);
@@ -215,15 +215,15 @@ fn update_grass(
         }
         
     } else {
-        // // simulate wind
-        // let elapsed_time = time.elapsed_seconds_f64();
-        // let (plyr_e, plyr_trans) = player.get_single().unwrap();
-        // for (mh,grass_data, grass_trans, visibility) in grass.iter() {
-        //     if visibility.get() && plyr_trans.translation.xz().distance(grass_trans.translation.xz()) < 1.4*GRASS_TILE_SIZE { // TODO: calculate the distance based off the tile size
-        //         let mesh = meshes.get_mut(mh).unwrap();
-        //         apply_wind(mesh, grass_data, &perlin, elapsed_time);
-        //     }
-        // }
+        // simulate wind
+        let elapsed_time = time.elapsed_seconds_f64();
+        let (plyr_e, plyr_trans) = player.get_single().unwrap();
+        for (mh,grass_data, grass_trans, visibility) in grass.iter() {
+            if visibility.get() && plyr_trans.translation.xz().distance(grass_trans.translation.xz()) < 1.4*GRASS_TILE_SIZE { // TODO: calculate the distance based off the tile size
+                // let mesh = meshes.get_mut(mh).unwrap();
+                // apply_wind(mesh, grass_data, &perlin, elapsed_time);
+            }
+        }
     }
 
 }

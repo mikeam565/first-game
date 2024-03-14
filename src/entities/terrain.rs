@@ -9,8 +9,9 @@ use crate::util::perlin::{self, sample_terrain_height};
 use bevy_rapier3d::prelude::*;
 
 pub const PLANE_SIZE: f32 = 3000.;
+pub const SIZE_NO_PLAYER: f32 = 6000.;
 const SUBDIVISIONS_LEVEL_1: u32 = 512;
-const SUBDIVISIONS_LEVEL_2: u32 = 128;
+const SUBDIVISIONS_LEVEL_2: u32 = 256;
 const SUBDIVISIONS_LEVEL_3: u32 = 2;
 const TILE_WIDTH: u32 = 4; // how wide a tile should be
 const TEXTURE_SCALE: f32 = 7.;
@@ -18,6 +19,13 @@ const WATER_TEXTURE_SCALE: f32 = 20.;
 pub const BASE_LEVEL: f32 = 200.;
 pub const WATER_LEVEL: f32 = 189.;
 const WATER_SCROLL_SPEED: f32 = 0.001;
+const HEIGHT_PEAKS: f32 = 450.;
+const HEIGHT_SAND: f32 = 200.;
+pub const HEIGHT_TEMPERATE_START: f32 = 210.;
+pub const HEIGHT_TEMPERATE_END: f32 = 400.;
+const COLOR_TEMPERATE: [f32;4] = [16./255., 24./255., 9./255., 255./255.];
+const COLOR_SAND: [f32;4] = [80./255., 72./255., 49./255., 255./255.];
+const COLOR_PEAKS: [f32;4] = [255./255.,255./255.,255./255.,255./255.];
 
 // struct for marking terrain
 #[derive(Component)]
@@ -40,12 +48,12 @@ pub fn update_terrain(
     if terrain_with_player.is_empty() { // scene start
         // spawn chunk at player
         let player_trans = player.get_single().unwrap().translation;
-        spawn_terrain_chunk(&mut commands, &mut meshes, &mut materials, &asset_server, 0., 0., true, SUBDIVISIONS_LEVEL_1);
+        spawn_terrain_chunk(&mut commands, &mut meshes, &mut materials, &asset_server, 0., 0., true, PLANE_SIZE, SUBDIVISIONS_LEVEL_1);
         // spawn chunks without player in them
         for (dx,dz) in [(1,0),(-1,0),(0,1),(0,-1),(1,1),(1,-1),(-1,1),(-1,-1)] {
-            let calc_dx = dx as f32 * PLANE_SIZE;
-            let calc_dz = dz as f32 * PLANE_SIZE;
-            spawn_terrain_chunk(&mut commands, &mut meshes, &mut materials, &asset_server, player_trans.x + calc_dx, player_trans.z + calc_dz, false, SUBDIVISIONS_LEVEL_2);
+            let calc_dx = dx as f32 * (PLANE_SIZE/2. + SIZE_NO_PLAYER/2.);
+            let calc_dz = dz as f32 * (PLANE_SIZE/2. + SIZE_NO_PLAYER/2.);
+            spawn_terrain_chunk(&mut commands, &mut meshes, &mut materials, &asset_server, player_trans.x + calc_dx, player_trans.z + calc_dz, false, SIZE_NO_PLAYER, SUBDIVISIONS_LEVEL_2);
         }
         spawn_water_plane(&mut commands, &mut meshes, &mut materials, &asset_server);
     } else { // main update logic
@@ -82,7 +90,7 @@ fn regenerate_terrain(
         no_pl_trans.translation = no_pl_trans.translation + delta;
         no_pl_trans.translation.y = 0.;
         let mesh = meshes.get_mut(mh).unwrap();
-        let new_mesh = &mut generate_terrain_mesh(no_pl_trans.translation.x, no_pl_trans.translation.z, SUBDIVISIONS_LEVEL_2);
+        let new_mesh = &mut generate_terrain_mesh(no_pl_trans.translation.x, no_pl_trans.translation.z, SIZE_NO_PLAYER, SUBDIVISIONS_LEVEL_2);
         *mesh = new_mesh.clone();
         commands.get_entity(no_pl_ent).unwrap().insert(Collider::from_bevy_mesh(&mesh, &collider_shape).unwrap());
     }
@@ -92,10 +100,42 @@ fn regenerate_terrain(
         pl_trans.translation = pl_trans.translation + delta;
         pl_trans.translation.y = 0.;
         let mesh = meshes.get_mut(mh).unwrap();
-        let new_mesh = &mut generate_terrain_mesh(pl_trans.translation.x, pl_trans.translation.z, SUBDIVISIONS_LEVEL_1);
+        let new_mesh = &mut generate_terrain_mesh(pl_trans.translation.x, pl_trans.translation.z, PLANE_SIZE, SUBDIVISIONS_LEVEL_1);
         *mesh = new_mesh.clone();
         commands.get_entity(pl_ent).unwrap().insert(Collider::from_bevy_mesh(&mesh, &collider_shape).unwrap());
     }
+}
+
+fn get_terrain_color(y: f32) -> [f32;4] {
+    if y < HEIGHT_SAND { COLOR_SAND }
+    else if y > HEIGHT_PEAKS { COLOR_PEAKS }
+    else if y < HEIGHT_TEMPERATE_START {
+        terrain_color_gradient(
+            (y-HEIGHT_SAND)/(HEIGHT_TEMPERATE_START-HEIGHT_SAND),
+            COLOR_SAND,
+            COLOR_TEMPERATE
+        )
+    } else if y < HEIGHT_TEMPERATE_END {
+        COLOR_TEMPERATE
+    } else {
+        terrain_color_gradient(
+            (y-HEIGHT_TEMPERATE_END)/(HEIGHT_PEAKS-HEIGHT_TEMPERATE_END),
+            COLOR_TEMPERATE,
+            COLOR_PEAKS
+        )
+    }
+}
+
+fn terrain_color_gradient(ratio: f32, rgba1: [f32; 4], rgba2: [f32; 4]) -> [f32;4] {
+    let [r1, g1, b1, a1] = rgba1;
+    let [r2, g2, b2, a2] = rgba2;
+
+    [
+        r1 + (r2-r1)*(ratio),
+        g1 + (g2-g1)*(ratio),
+        b1 + (b2-b1)*(ratio),
+        a1 + (a2-a1)*(ratio)
+    ]
 }
 
 fn spawn_terrain_chunk(
@@ -105,30 +145,10 @@ fn spawn_terrain_chunk(
     asset_server: &Res<AssetServer>,
     x: f32, z: f32,
     contains_player: bool,
+    size: f32,
     subdivisions: u32
 ) -> Entity {    
-    let num_vertices: usize = (SUBDIVISIONS_LEVEL_1 as usize + 2)*(SUBDIVISIONS_LEVEL_1 as usize + 2);
-    let height_map = perlin::terrain_perlin();
-    let mut uvs: Vec<[f32;2]> = Vec::with_capacity(num_vertices);
-    let mut mesh: Mesh = bevy::prelude::shape::Plane {
-        size: PLANE_SIZE,
-        subdivisions
-    }.into();
-    // get positions
-    let pos_attr = mesh.attribute_mut(Mesh::ATTRIBUTE_POSITION).unwrap();
-    let VertexAttributeValues::Float32x3(pos_attr) = pos_attr else {
-        panic!("Unexpected vertex format, expected Float32x3");
-    };
-    // modify y with height sampling
-    for i in 0..pos_attr.len() {
-        let pos = pos_attr.get_mut(i).unwrap();
-        pos[1] = sample_terrain_height(&height_map, x + pos[0], z + pos[2]);
-        uvs.push([pos[0]/(TILE_WIDTH as f32*TEXTURE_SCALE), pos[2]/(TILE_WIDTH as f32*TEXTURE_SCALE)]);
-    };
-
-    mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
-
-    let _ = mesh.generate_tangents();
+    let mesh = generate_terrain_mesh(x, z, size, subdivisions);
     
     let sampler_desc = ImageSamplerDescriptor {
         address_mode_u: ImageAddressMode::Repeat,
@@ -139,12 +159,12 @@ fn spawn_terrain_chunk(
         s.sampler = ImageSampler::Descriptor(sampler_desc.clone());
     };
 
-    let texture_handle = asset_server.load_with_settings("terrain/rocky_soil.png", settings.clone());
-    let normal_handle = asset_server.load_with_settings("terrain/rocky_soil_normal.png", settings);
+    // let texture_handle = asset_server.load_with_settings("terrain/rocky_soil.png", settings.clone());
+    // let normal_handle = asset_server.load_with_settings("terrain/rocky_soil_normal.png", settings);
     let terrain_material = StandardMaterial {
-        base_color: if contains_player { Color::WHITE } else { Color::BISQUE },
-        base_color_texture: Some(texture_handle.clone()),
-        normal_map_texture: Some(normal_handle.clone()),
+        // base_color: if contains_player { Color::WHITE } else { Color::WHITE }, // use to see difference in terrain chunks
+        // base_color_texture: Some(texture_handle.clone()),
+        // normal_map_texture: Some(normal_handle.clone()),
         alpha_mode: AlphaMode::Opaque,
         double_sided: true,
         perceptual_roughness: 1.0,
@@ -182,9 +202,11 @@ fn spawn_water_plane(
     asset_server: &Res<AssetServer>,
 ) {
     let mut water_mesh: Mesh = shape::Plane {
-        size: PLANE_SIZE*3.,
-        subdivisions: 4,
+        size: PLANE_SIZE*5.,
+        subdivisions: 1,
     }.into();
+
+    let water_mesh_darkness = water_mesh.clone();
 
     let pos_attr = water_mesh.attribute(Mesh::ATTRIBUTE_POSITION).unwrap();
     let VertexAttributeValues::Float32x3(pos_attr) = pos_attr else {
@@ -210,27 +232,38 @@ fn spawn_water_plane(
     commands.spawn( PbrBundle {
         mesh: meshes.add(water_mesh),
         material: materials.add(StandardMaterial {
-            base_color: Color::rgb(0.,96./256.,134./256.),
+            base_color: Color::rgba(0.,54./256.,78./256., 236./256.),
             perceptual_roughness: 0.7,
             metallic: 0.2,
             reflectance: 0.45,
             diffuse_transmission: 0.0,
             specular_transmission:0.3,
             normal_map_texture: Some(normal_handle.clone()),
-            flip_normal_map_y: true,
+            flip_normal_map_y: false,
+            alpha_mode: AlphaMode::Blend,
             ..default()
         }),
         transform: Transform::from_xyz(0.0,WATER_LEVEL,0.0),
         ..default()
     }).insert(Water);
+    // commands.spawn( PbrBundle {
+    //     mesh: meshes.add(water_mesh_darkness),
+    //     material: materials.add(StandardMaterial {
+    //         base_color: Color::rgb(0., 54./256., 78./256.),
+    //         ..default()
+    //     }),
+    //     transform: Transform::from_xyz(0.0, WATER_LEVEL - 50., 0.0),
+    //     ..default()
+    // });
 }
 
-fn generate_terrain_mesh(x: f32, z: f32, subdivisions: u32) -> Mesh {
-    let num_vertices: usize = (subdivisions as usize + 2)*(subdivisions as usize + 2);
+fn generate_terrain_mesh(x: f32, z: f32, size: f32, subdivisions: u32) -> Mesh {
+    let num_vertices: usize = (SUBDIVISIONS_LEVEL_1 as usize + 2)*(SUBDIVISIONS_LEVEL_1 as usize + 2);
     let height_map = perlin::terrain_perlin();
     let mut uvs: Vec<[f32;2]> = Vec::with_capacity(num_vertices);
+    let mut vertex_colors: Vec<[f32;4]> = Vec::with_capacity(num_vertices);
     let mut mesh: Mesh = bevy::prelude::shape::Plane {
-        size: PLANE_SIZE,
+        size,
         subdivisions
     }.into();
     // get positions
@@ -243,10 +276,11 @@ fn generate_terrain_mesh(x: f32, z: f32, subdivisions: u32) -> Mesh {
         let pos = pos_attr.get_mut(i).unwrap();
         pos[1] = sample_terrain_height(&height_map, x + pos[0], z + pos[2]);
         uvs.push([pos[0]/(TILE_WIDTH as f32*TEXTURE_SCALE), pos[2]/(TILE_WIDTH as f32*TEXTURE_SCALE)]);
-        // Todo: Terrain texture should stay in-place as terrain is updated from player traversal
+        vertex_colors.push(get_terrain_color(pos[1]));
     };
 
     mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, vertex_colors);
 
     let _ = mesh.generate_tangents();
 

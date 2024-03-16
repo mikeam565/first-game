@@ -1,13 +1,9 @@
 ## Small deliverables
 - Rounded normal for grass
+- Improve terrain generation (flatter near water, steeper mountains)
 ## Medium/Longer term
 * Performance Optimization
-    - Recently implemented: Dynamic terrain resolution (I want extreme view-distances for this game)
-    - Still need:
-        * Dynamic grass. This is critical for what I was going for in this project
-            -> (2/27) Implemented view + distance based logic for updating grass. This lends to a model with more smaller patches of grass instead of 9 big ones.
-                -> Generating and despawning entities based off proximity to player should be generalized into a trait and used for anything procedural. Like my first go at dynamic terrain
-            * https://bevyengine.org/examples/Shaders/shader-instancing/
+    - instancing grass -> https://bevyengine.org/examples/Shaders/shader-instancing/
 
 ## Notes
 * Queries

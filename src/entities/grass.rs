@@ -220,8 +220,8 @@ fn update_grass(
         let (plyr_e, plyr_trans) = player.get_single().unwrap();
         for (mh,grass_data, grass_trans, visibility) in grass.iter() {
             if visibility.get() && plyr_trans.translation.xz().distance(grass_trans.translation.xz()) < 1.4*GRASS_TILE_SIZE { // TODO: calculate the distance based off the tile size
-                // let mesh = meshes.get_mut(mh).unwrap();
-                // apply_wind(mesh, grass_data, &perlin, elapsed_time);
+                let mesh = meshes.get_mut(mh).unwrap();
+                apply_wind(mesh, grass_data, &perlin, elapsed_time);
             }
         }
     }

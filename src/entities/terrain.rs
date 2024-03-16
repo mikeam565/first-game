@@ -239,7 +239,7 @@ fn spawn_water_plane(
             diffuse_transmission: 0.0,
             specular_transmission:0.3,
             normal_map_texture: Some(normal_handle.clone()),
-            flip_normal_map_y: false,
+            flip_normal_map_y: true,
             alpha_mode: AlphaMode::Blend,
             ..default()
         }),

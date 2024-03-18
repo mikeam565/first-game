@@ -4,13 +4,18 @@ use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
 use crate::{entities as ent, util::{camera::setup_camera, gravity::{GRAVITY_DIR, GRAVITY_ACC}}};
 
-const SPEED: f32 = 15.0;
+const SPEED: f32 = 50.0;
 const ROTATION_SPEED: f32 = 0.3;
 const FIRE_RATE: f32 = 0.5;
 const PLAYER_HEIGHT: f32 = 3.0;
 const PLAYER_WIDTH: f32 = 1.0;
 const JUMP_HEIGHT: f32 = 20.0;
 const RUN_COEFF: f32 = 3.0;
+pub const SPAWN_TRANSFORM: Transform = Transform::from_xyz(0.0, 200. + PLAYER_HEIGHT + 5., 0.0);
+
+// struct for marking terrain that contains the player
+#[derive(Component)]
+pub struct ContainsPlayer;
 
 #[derive(Reflect, Component, Default, Debug)]
 #[reflect(Component)]
@@ -24,7 +29,7 @@ pub fn setup_player(
     mut materials: ResMut<Assets<StandardMaterial>>,
     asset_server: Res<AssetServer>,
 ) {
-    let transform = Transform::from_xyz(0.0, 200. + PLAYER_HEIGHT + 5., 0.0);
+    let transform = SPAWN_TRANSFORM;
     let mesh = Mesh::from(shape::Box::new(PLAYER_WIDTH, PLAYER_HEIGHT, PLAYER_WIDTH));
     commands.spawn(PbrBundle {
         mesh: meshes.add(mesh.clone()),
@@ -96,8 +101,6 @@ fn player_movement(
         controller.translation = Some(base_movement + movement);        
     }
 }
-
-// fn read_result_system(controllers: Query<(Entity, &KinematicCharacterControllerOutput)>) {
 
 fn read_result_system(
     mut commands: Commands,

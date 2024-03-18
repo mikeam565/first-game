@@ -3,9 +3,8 @@ use noise::{NoiseFn, Perlin};
 use crate::entities::terrain;
 pub const WIND_SEED: u32 = 0;
 pub const GRASS_HEIGHT_SEED: u32 = 1;
-pub const TERRAIN_SEED: u32 = 2;
-const TERRAIN_HEIGHT_SCALE: f32 = 15.0;
-const TERRAIN_SAMPLING_SMOOTHNESS: f64 = 100.;
+pub const TERRAIN_SEED: u32 = 4;
+const HILL_HEIGHTS: f32 = 10.0;
 const TERRAIN_BUMPINESS: f32 = 2.0;
 const MOUNTAIN_HEIGHTS: f32 = 256.;
 
@@ -25,10 +24,31 @@ impl PerlinNoiseEntity {
 
 pub fn sample_terrain_height(terrain_perlin: &Perlin, x: f32, z: f32) -> f32 {
     terrain::BASE_LEVEL
-    + terrain_perlin.get([x as f64 / TERRAIN_SAMPLING_SMOOTHNESS, z as f64 / TERRAIN_SAMPLING_SMOOTHNESS]) as f32 * TERRAIN_HEIGHT_SCALE // hills
-    + terrain_perlin.get([z as f64 / 16., x as f64 / 16.]) as f32 * TERRAIN_BUMPINESS // finer detail
-    + terrain_perlin.get([z as f64 / 2048., x as f64 / 2048.]) as f32 * MOUNTAIN_HEIGHTS // mountains
+    // + terrain_perlin.get([x as f64 / 100., z as f64 / 100.]) as f32 * HILL_HEIGHTS // hills
+    // + terrain_perlin.get([z as f64 / 16., x as f64 / 16.]) as f32 * TERRAIN_BUMPINESS // finer detail
+    + detail_component(terrain_perlin, x, z)
+    + hill_component(terrain_perlin, x, z)
+    + mountain_component(terrain_perlin, x, z)
+}
 
+fn detail_component(terrain_perlin: &Perlin, x: f32, z: f32) -> f32 {
+    let mountain_sample = sample_mountain(terrain_perlin, x, z);
+    terrain_perlin.get([z as f64 / 16., x as f64 / 16.]) as f32 * (mountain_sample/0.5)*TERRAIN_BUMPINESS // finer detail
+}
+
+fn hill_component(terrain_perlin: &Perlin, x: f32, z: f32) -> f32 {
+    let mountain_sample = sample_mountain(terrain_perlin, x, z);
+
+    terrain_perlin.get([x as f64 / 100., z as f64 / 100.]) as f32 * (mountain_sample/0.25)*HILL_HEIGHTS
+}
+
+fn mountain_component(terrain_perlin: &Perlin, x: f32, z: f32) -> f32 {
+    let mountain_sample = sample_mountain(terrain_perlin, x, z);
+    if mountain_sample < 1. { MOUNTAIN_HEIGHTS * mountain_sample/(1. - mountain_sample)} else { MOUNTAIN_HEIGHTS }
+}
+
+fn sample_mountain(terrain_perlin: &Perlin, x: f32, z: f32) -> f32 {
+    terrain_perlin.get([z as f64 / 4096., x as f64 / 4096.]) as f32
 }
 
 pub fn setup_perlin(mut commands: Commands) {

@@ -27,7 +27,7 @@ fn main() {
             AtmospherePlugin,
             RapierPhysicsPlugin::<NoUserData>::default(),
             // RapierDebugRenderPlugin::default(),
-            util::camera::CameraPlugin,
+            // util::camera::CameraPlugin,
             util::lighting::LightingPlugin,
             util::perlin::PerlinPlugin,
             ent::terrain::TerrainPlugin,

@@ -8,8 +8,8 @@ use crate::entities::{grass,util,player};
 use crate::util::perlin::{self, sample_terrain_height};
 use bevy_rapier3d::prelude::*;
 
-pub const PLANE_SIZE: f32 = 3000.;
-pub const SIZE_NO_PLAYER: f32 = 6000.;
+pub const PLANE_SIZE: f32 = 6000.;
+pub const SIZE_NO_PLAYER: f32 = 6000.; // TODO: This actually causes overlaps if it is bigger than PLANE_SIZE
 const SUBDIVISIONS_LEVEL_1: u32 = 512;
 const SUBDIVISIONS_LEVEL_2: u32 = 256;
 const SUBDIVISIONS_LEVEL_3: u32 = 2;
@@ -19,11 +19,11 @@ const WATER_TEXTURE_SCALE: f32 = 20.;
 pub const BASE_LEVEL: f32 = 200.;
 pub const WATER_LEVEL: f32 = 189.;
 const WATER_SCROLL_SPEED: f32 = 0.001;
-const HEIGHT_PEAKS: f32 = 450.;
+const HEIGHT_PEAKS: f32 = 1500.;
 const HEIGHT_SAND: f32 = 200.;
 pub const HEIGHT_TEMPERATE_START: f32 = 210.;
-pub const HEIGHT_TEMPERATE_END: f32 = 400.;
-const COLOR_TEMPERATE: [f32;4] = [16./255., 24./255., 9./255., 255./255.];
+pub const HEIGHT_TEMPERATE_END: f32 = 800.;
+const COLOR_TEMPERATE: [f32;4] = [0.079,0.079,0.,1.];
 const COLOR_SAND: [f32;4] = [80./255., 72./255., 49./255., 255./255.];
 const COLOR_PEAKS: [f32;4] = [255./255.,255./255.,255./255.,255./255.];
 
@@ -31,18 +31,14 @@ const COLOR_PEAKS: [f32;4] = [255./255.,255./255.,255./255.,255./255.];
 #[derive(Component)]
 pub struct Terrain;
 
-// struct for marking terrain that contains the player
-#[derive(Component)]
-pub struct ContainsPlayer;
-
 /// set up a simple 3D scene
 pub fn update_terrain(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     asset_server: Res<AssetServer>,
-    mut terrain_no_player: Query<(Entity,&mut Transform,&Handle<Mesh>), (Without<ContainsPlayer>,With<Terrain>)>,
-    mut terrain_with_player: Query<(Entity,&mut Transform, &Handle<Mesh>), (With<ContainsPlayer>,With<Terrain>)>,
+    mut terrain_no_player: Query<(Entity,&mut Transform,&Handle<Mesh>), (Without<player::ContainsPlayer>,With<Terrain>)>,
+    mut terrain_with_player: Query<(Entity,&mut Transform, &Handle<Mesh>), (With<player::ContainsPlayer>,With<Terrain>)>,
     player: Query<&Transform, (With<player::Player>,Without<Terrain>)>,
 ) {
     if terrain_with_player.is_empty() { // scene start
@@ -79,8 +75,8 @@ fn regenerate_terrain(
     meshes: &mut ResMut<Assets<Mesh>>,
     materials: &mut ResMut<Assets<StandardMaterial>>,
     asset_server: &Res<AssetServer>,
-    terrain_no_player: &mut Query<(Entity,&mut Transform, &Handle<Mesh>), (Without<ContainsPlayer>, With<Terrain>)>,
-    terrain_w_player: &mut Query<(Entity,&mut Transform, &Handle<Mesh>), (With<ContainsPlayer>, With<Terrain>)>,
+    terrain_no_player: &mut Query<(Entity,&mut Transform, &Handle<Mesh>), (Without<player::ContainsPlayer>, With<Terrain>)>,
+    terrain_w_player: &mut Query<(Entity,&mut Transform, &Handle<Mesh>), (With<player::ContainsPlayer>, With<Terrain>)>,
     delta: Vec3
 ) {
     let collider_shape = ComputedColliderShape::TriMesh;
@@ -187,7 +183,7 @@ fn spawn_terrain_chunk(
         .insert(Terrain)
         .insert(Collider::from_bevy_mesh(&mesh, &collider_shape).unwrap()
     );
-    if contains_player { parent_terrain.insert(ContainsPlayer); }
+    if contains_player { parent_terrain.insert(player::ContainsPlayer); }
     parent_terrain.id()
     
 }

@@ -5,14 +5,16 @@ use noise::{Perlin, NoiseFn};
 use rand::{thread_rng, Rng};
 use crate::util::perlin::{PerlinNoiseEntity, self};
 
+use super::player::ContainsPlayer;
+
 // Grass constants
-const GRASS_TILE_SIZE_1: f32 = 600.;
-const GRASS_TILE_SIZE_2: f32 = 600.; // TODO: like terrain, this causes overlaps if bigger than SIZE_1
-const NUM_GRASS_1: u32 = 768; // number of grass blades in one row of a tile
-const NUM_GRASS_2: u32 = 1024;
+const GRASS_TILE_SIZE_1: f32 = 256.;
+const GRASS_TILE_SIZE_2: f32 = 256.; // TODO: like terrain, this causes overlaps if bigger than SIZE_1
+const NUM_GRASS_1: u32 = 256; // number of grass blades in one row of a tile
+const NUM_GRASS_2: u32 = 256;
 const GRASS_BLADE_VERTICES: u32 = 3;
-const GRASS_WIDTH: f32 = 0.3;
-const GRASS_HEIGHT: f32 = 3.0;
+const GRASS_WIDTH: f32 = 0.6;
+const GRASS_HEIGHT: f32 = 4.0;
 const GRASS_BASE_COLOR_1: [f32;4] = [0.102,0.153,0.,1.];
 const GRASS_BASE_COLOR_2: [f32;4] = [0.,0.019,0.,1.];
 pub const GRASS_SECOND_COLOR: [f32;4] = [0.079,0.079,0.,1.];
@@ -81,14 +83,14 @@ pub fn generate_grass(
         }
     }
 
-    generate_grass_geometry(&all_verts, all_indices, &mut mesh, &grass_offsets, &spawn_x, &spawn_z);
+    generate_grass_geometry(&all_verts, all_indices, &mut mesh, &grass_offsets);
 
     let grass_material = StandardMaterial {
         base_color: Color::WHITE,
         double_sided: false,
         perceptual_roughness: 1.0,
         reflectance: 0.5,
-        cull_mode: Some(Face::Back),
+        cull_mode: None,
         ..default()
     };
 
@@ -167,10 +169,9 @@ fn apply_curve(transforms: &mut Vec<Transform>, x: f32, y:f32, z: f32) {
     }
 }
 
-pub fn generate_grass_geometry(verts: &Vec<Vec3>, vec_indices: Vec<u32>, mesh: &mut Mesh, grass_offsets: &Vec<[f32; 3]>, spawn_x: &f32, spawn_z: &f32) {
+pub fn generate_grass_geometry(verts: &Vec<Vec3>, vec_indices: Vec<u32>, mesh: &mut Mesh, grass_offsets: &Vec<[f32; 3]>) {
     let indices = mesh::Indices::U32(vec_indices);
 
-    // normals need the spawn_x and spawn_z added in for lighting to properly work
     let vertices: Vec<([f32;3],[f32;3],[f32;2])> = verts.iter().map(|v| { (v.to_array(), [0., 1.,0.], [0.0,0.0])} ).collect();
 
     let mut positions = Vec::with_capacity(verts.capacity());
@@ -197,23 +198,22 @@ fn update_grass(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    mut grass_with_player: Query<(&Handle<Mesh>, &GrassData, &Transform, &ViewVisibility), (With<Grass>, With<player::ContainsPlayer>)>,
-    mut grass_no_player: Query<(&Handle<Mesh>, &GrassData, &Transform, &ViewVisibility), (With<Grass>, Without<player::ContainsPlayer>)>,
+    mut grass: Query<(&Handle<Mesh>, &GrassData, &Transform, &ViewVisibility), With<Grass>>,
     perlin: Res<PerlinNoiseEntity>,
     time: Res<Time>,
     player: Query<(Entity,&Transform),With<entities::player::Player>>,
 ) {
-    if grass_with_player.is_empty() {
-        let (plyr_e, plyr_trans) = player.get_single().unwrap();
-        let x = plyr_trans.translation.x;
-        let z = plyr_trans.translation.z;
+    let (plyr_e, player_trans) = player.get_single().unwrap();
+    if grass.is_empty() {
+        let x = player_trans.translation.x;
+        let z = player_trans.translation.z;
         // main tile
         let (main_mat, main_grass, main_data) = generate_grass(&mut commands, &mut meshes, &mut materials, x, z, NUM_GRASS_1, GRASS_TILE_SIZE_1);
-        commands.spawn(main_mat).insert(main_grass).insert(main_data).insert(player::ContainsPlayer);
+        commands.spawn(main_mat).insert(main_grass).insert(main_data).insert(ContainsPlayer);
         // surrounding tiles
         for (dx,dz) in [(1,0),(-1,0),(0,1),(0,-1),(1,1),(1,-1),(-1,1),(-1,-1)] {
             let calc_dx = dx as f32 * (GRASS_TILE_SIZE_1/2. + GRASS_TILE_SIZE_2/2.);
-            let calc_dz = dz as f32 * (GRASS_TILE_SIZE_1/2. + GRASS_TILE_SIZE_2/2.);;
+            let calc_dz = dz as f32 * (GRASS_TILE_SIZE_1/2. + GRASS_TILE_SIZE_2/2.);
             let (mat, grass, data) = generate_grass(&mut commands, &mut meshes, &mut materials, x + calc_dx, z + calc_dz, NUM_GRASS_2, GRASS_TILE_SIZE_2);
             commands.spawn(mat).insert(grass).insert(data);
         }
@@ -222,12 +222,18 @@ fn update_grass(
         // simulate wind on main grass
         let elapsed_time = time.elapsed_seconds_f64();
         let (plyr_e, plyr_trans) = player.get_single().unwrap();
-        let (mh, grass_data, grass_trans, visibility) = grass_with_player.get_single_mut().unwrap();
-        let mesh = meshes.get_mut(mh).unwrap();
-        apply_wind(mesh, grass_data, &perlin, elapsed_time);
+        for (mh, grass_data, grass_trans, visibility) in grass.iter() {
+            if (player_trans.translation.x - grass_trans.translation.x).abs() < 1.5*GRASS_TILE_SIZE_1 && (player_trans.translation.z - grass_trans.translation.z).abs() < 1.5*GRASS_TILE_SIZE_1 {
+                let mesh = meshes.get_mut(mh).unwrap();
+                apply_wind(mesh, grass_data, &perlin, elapsed_time);
+            }
+        }
     }
-
 }
+
+// if (player_trans.translation.x - terrain_trans.translation.x).abs() > PLANE_SIZE/4. || (player_trans.translation.z - terrain_trans.translation.z).abs() > PLANE_SIZE/4. {
+//     delta = Some(player_trans.translation - terrain_trans.translation);
+// }
 
 fn generate_vertex_colors(positions: &Vec<[f32; 3]>, grass_offsets: &Vec<[f32; 3]>) -> Vec<[f32; 4]> {
     positions.iter().enumerate().map(|(i,[x,y,z])| {

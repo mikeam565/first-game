@@ -42,8 +42,6 @@ pub fn setup_player(
     .insert(KinematicCharacterController::default())
     .insert(Player { shooting_timer: Timer::from_seconds(FIRE_RATE, TimerMode::Repeating) })
     .insert(Name::new("Player"));
-
-    commands.spawn(setup_camera(transform));
 }
 
 fn player_movement(

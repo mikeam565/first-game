@@ -15,7 +15,7 @@ pub const SPAWN_TRANSFORM: Transform = Transform::from_xyz(0.0, 200. + PLAYER_HE
 
 // struct for marking terrain that contains the player
 #[derive(Component)]
-pub struct ContainsPlayer;
+pub struct ContainsPlayer(pub bool);
 
 #[derive(Reflect, Component, Default, Debug)]
 #[reflect(Component)]

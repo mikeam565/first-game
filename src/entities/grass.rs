@@ -1,5 +1,8 @@
+use std::borrow::BorrowMut;
+
 use crate::entities::{terrain, player};
 use crate::{entities, util::perlin::sample_terrain_height};
+use bevy::render::primitives::Aabb;
 use bevy::{prelude::*, render::{render_resource::{PrimitiveTopology, Face}, mesh::{self, VertexAttributeValues}}, utils::HashMap};
 use noise::{Perlin, NoiseFn};
 use rand::{thread_rng, Rng};
@@ -8,13 +11,13 @@ use crate::util::perlin::{PerlinNoiseEntity, self};
 use super::player::ContainsPlayer;
 
 // Grass constants
-const GRASS_TILE_SIZE_1: f32 = 256.;
-const GRASS_TILE_SIZE_2: f32 = 256.; // TODO: like terrain, this causes overlaps if bigger than SIZE_1
-const NUM_GRASS_1: u32 = 256; // number of grass blades in one row of a tile
-const NUM_GRASS_2: u32 = 256;
+const GRASS_TILE_SIZE_1: f32 = 64.;
+const GRASS_TILE_SIZE_2: f32 = 64.; // TODO: like terrain, this causes overlaps if bigger than SIZE_1
+const NUM_GRASS_1: u32 = 128; // number of grass blades in one row of a tile
+const NUM_GRASS_2: u32 = 128;
 const GRASS_BLADE_VERTICES: u32 = 3;
-const GRASS_WIDTH: f32 = 0.6;
-const GRASS_HEIGHT: f32 = 4.0;
+const GRASS_WIDTH: f32 = 0.3;
+const GRASS_HEIGHT: f32 = 2.4;
 const GRASS_BASE_COLOR_1: [f32;4] = [0.102,0.153,0.,1.];
 const GRASS_BASE_COLOR_2: [f32;4] = [0.,0.019,0.,1.];
 pub const GRASS_SECOND_COLOR: [f32;4] = [0.079,0.079,0.,1.];
@@ -29,7 +32,8 @@ const WIND_SPEED: f64 = 0.5;
 const WIND_CONSISTENCY: f64 = 10.0; //
 const WIND_LEAN: f32 = 0.0; // determines how already bent grass will be at 0 wind
 const CURVE_POWER: f32 = 1.0; // the linearity / exponentiality of the application/bend of the wind
-
+const DESPAWN_DISTANCE: f32 = 5. * GRASS_TILE_SIZE_1;
+const WIND_SIM_DISTANCE: f32 = 1.4*GRASS_TILE_SIZE_1;
 // Grass Component
 #[derive(Component)]
 pub struct GrassData {
@@ -194,40 +198,83 @@ pub fn generate_grass_geometry(verts: &Vec<Vec3>, vec_indices: Vec<u32>, mesh: &
     let _ = mesh.generate_tangents();
 }
 
+#[derive(Component)]
+struct GrassGrid(HashMap<(i32,i32), bool>);
+
 fn update_grass(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    mut grass: Query<(&Handle<Mesh>, &GrassData, &Transform, &ViewVisibility), With<Grass>>,
+    mut grass: Query<(Entity, &Handle<Mesh>, &GrassData, &Transform, &ViewVisibility, &mut ContainsPlayer), With<Grass>>,
+    mut grid: Query<&mut GrassGrid>,
     perlin: Res<PerlinNoiseEntity>,
     time: Res<Time>,
     player: Query<(Entity,&Transform),With<entities::player::Player>>,
 ) {
     let (plyr_e, player_trans) = player.get_single().unwrap();
+    let x = player_trans.translation.x;
+    let z = player_trans.translation.z;
     if grass.is_empty() {
-        let x = player_trans.translation.x;
-        let z = player_trans.translation.z;
-        // main tile
-        let (main_mat, main_grass, main_data) = generate_grass(&mut commands, &mut meshes, &mut materials, x, z, NUM_GRASS_1, GRASS_TILE_SIZE_1);
-        commands.spawn(main_mat).insert(main_grass).insert(main_data).insert(ContainsPlayer);
-        // surrounding tiles
-        for (dx,dz) in [(1,0),(-1,0),(0,1),(0,-1),(1,1),(1,-1),(-1,1),(-1,-1)] {
-            let calc_dx = dx as f32 * (GRASS_TILE_SIZE_1/2. + GRASS_TILE_SIZE_2/2.);
-            let calc_dz = dz as f32 * (GRASS_TILE_SIZE_1/2. + GRASS_TILE_SIZE_2/2.);
-            let (mat, grass, data) = generate_grass(&mut commands, &mut meshes, &mut materials, x + calc_dx, z + calc_dz, NUM_GRASS_2, GRASS_TILE_SIZE_2);
-            commands.spawn(mat).insert(grass).insert(data);
-        }
-        
-    } else {
-        // simulate wind on main grass
-        let elapsed_time = time.elapsed_seconds_f64();
-        let (plyr_e, plyr_trans) = player.get_single().unwrap();
-        for (mh, grass_data, grass_trans, visibility) in grass.iter() {
-            if (player_trans.translation.x - grass_trans.translation.x).abs() < 1.5*GRASS_TILE_SIZE_1 && (player_trans.translation.z - grass_trans.translation.z).abs() < 1.5*GRASS_TILE_SIZE_1 {
-                let mesh = meshes.get_mut(mh).unwrap();
-                apply_wind(mesh, grass_data, &perlin, elapsed_time);
+        let mut grass_grid = GrassGrid(HashMap::new());
+        // generate grid of grass
+        for i in -5..5 {
+            for j in -5..5 {
+                let a = x + i as f32 * GRASS_TILE_SIZE_1;
+                let b = z + j as f32 * GRASS_TILE_SIZE_1;
+                grass_grid.0.insert((a as i32, b as i32), true);
+                let contains_player = (player_trans.translation.x - a).abs() < GRASS_TILE_SIZE_1/2. && (player_trans.translation.z - b).abs() < GRASS_TILE_SIZE_1/2.;
+                let color = if contains_player { Color::RED } else { Color::PURPLE };
+                let (main_mat, main_grass, main_data) = generate_grass(&mut commands, &mut meshes, &mut materials, a, b, NUM_GRASS_1, GRASS_TILE_SIZE_1);
+                commands.spawn(main_mat).insert(main_grass).insert(main_data).insert(ContainsPlayer(contains_player)).insert(AabbGizmo {color: Some(color)});
             }
         }
+        commands.spawn(grass_grid);     
+    } else {
+        let mut grass_grid = grid.get_single_mut().unwrap();
+        let elapsed_time = time.elapsed_seconds_f64();
+        let mut grass_w_player: Option<Entity> = None;
+        for (ent, mh, grass_data, grass_trans, visibility, mut contains_player) in grass.iter_mut() {
+            // remove or add ContainsPlayer if applicable
+            if (player_trans.translation.x - grass_trans.translation.x).abs() >= GRASS_TILE_SIZE_1/2. || (player_trans.translation.z - grass_trans.translation.z).abs() >= GRASS_TILE_SIZE_1/2. {
+                if contains_player.0 {
+                    *contains_player = ContainsPlayer(false);
+                }
+            } else {
+                if !contains_player.0 {
+                    *contains_player = ContainsPlayer(true);
+                    // generate new grass
+                    for i in -5..5 {
+                        for j in -5..5 {
+                            let a = grass_trans.translation.x + i as f32 * GRASS_TILE_SIZE_1;
+                            let b = grass_trans.translation.z + j as f32 * GRASS_TILE_SIZE_1;
+                            if let false = *grass_grid.0.get(&(a as i32,b as i32)).unwrap_or(&false) {
+                                grass_grid.0.insert((a as i32, b as i32), true);
+                                let (main_mat, main_grass, main_data) = generate_grass(&mut commands, &mut meshes, &mut materials, a, b, NUM_GRASS_1, GRASS_TILE_SIZE_1);
+                                commands.spawn(main_mat).insert(main_grass).insert(main_data).insert(ContainsPlayer(false)).insert(AabbGizmo {color: Some(Color::PURPLE)});
+                            }
+                        }
+                    }
+
+                }
+            }
+            if contains_player.0 {
+                grass_w_player = Some(ent);
+            }
+            // simulate wind only if close enough and if visible
+            if (player_trans.translation.x - grass_trans.translation.x).abs() < WIND_SIM_DISTANCE && (player_trans.translation.z - grass_trans.translation.z).abs() < WIND_SIM_DISTANCE && visibility.get() {
+                let mesh = meshes.get_mut(mh).unwrap();
+                apply_wind(mesh, grass_data, &perlin, elapsed_time);
+            } else if (player_trans.translation.x - grass_trans.translation.x).abs() > DESPAWN_DISTANCE || (player_trans.translation.z - grass_trans.translation.z).abs() > DESPAWN_DISTANCE {
+                grass_grid.0.insert((grass_trans.translation.x as i32, grass_trans.translation.z as i32), false);
+                commands.get_entity(ent).unwrap().despawn_recursive();
+            }
+        }
+
+        if let Some(grass_w_player) = grass_w_player {
+            // update aabb color
+            commands.get_entity(grass_w_player).unwrap().insert(AabbGizmo {color: Some(Color::RED)});
+        }
+
     }
 }
 

@@ -3,7 +3,7 @@ use noise::{NoiseFn, Perlin};
 use crate::entities::terrain;
 pub const WIND_SEED: u32 = 0;
 pub const GRASS_HEIGHT_SEED: u32 = 1;
-pub const TERRAIN_SEED: u32 = 4;
+pub const TERRAIN_SEED: u32 = 1231;
 const HILL_HEIGHTS: f32 = 10.0;
 const TERRAIN_BUMPINESS: f32 = 2.0;
 const MOUNTAIN_HEIGHTS: f32 = 256.;

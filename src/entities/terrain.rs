@@ -37,11 +37,10 @@ pub fn update_terrain(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     asset_server: Res<AssetServer>,
-    mut terrain_no_player: Query<(Entity,&mut Transform,&Handle<Mesh>), (Without<player::ContainsPlayer>,With<Terrain>)>,
-    mut terrain_with_player: Query<(Entity,&mut Transform, &Handle<Mesh>), (With<player::ContainsPlayer>,With<Terrain>)>,
+    mut terrain: Query<(Entity,&mut Transform, &Handle<Mesh>, &player::ContainsPlayer), With<Terrain>>,
     player: Query<&Transform, (With<player::Player>,Without<Terrain>)>,
 ) {
-    if terrain_with_player.is_empty() { // scene start
+    if terrain.is_empty() { // scene start
         // spawn chunk at player
         let player_trans = player.get_single().unwrap().translation;
         spawn_terrain_chunk(&mut commands, &mut meshes, &mut materials, &asset_server, 0., 0., true, PLANE_SIZE, SUBDIVISIONS_LEVEL_1);
@@ -53,19 +52,23 @@ pub fn update_terrain(
         }
         spawn_water_plane(&mut commands, &mut meshes, &mut materials, &asset_server);
     } else { // main update logic
-        let (entity, terrain_trans, mh) = terrain_with_player.get_single_mut().unwrap();
-        let player_trans = player.get_single().unwrap();
-        let mut delta: Option<Vec3> = None;
-
-        // determine player triggering terrain refresh
-        if (player_trans.translation.x - terrain_trans.translation.x).abs() > PLANE_SIZE/4. || (player_trans.translation.z - terrain_trans.translation.z).abs() > PLANE_SIZE/4. {
-            delta = Some(player_trans.translation - terrain_trans.translation);
-        }
-
-        // if they have, regenerate the terrain
-        if let Some(delta) = delta {
-            println!("Player has triggered terrain regeneration");
-            regenerate_terrain(&mut commands, &mut meshes, &mut materials, &asset_server, &mut terrain_no_player, &mut terrain_with_player, delta);
+        for (entity, terrain_trans, mh, contains_player) in terrain.iter_mut() {
+            if contains_player.0 {
+                let player_trans = player.get_single().unwrap();
+                let mut delta: Option<Vec3> = None;
+        
+                // determine player triggering terrain refresh
+                if (player_trans.translation.x - terrain_trans.translation.x).abs() > PLANE_SIZE/4. || (player_trans.translation.z - terrain_trans.translation.z).abs() > PLANE_SIZE/4. {
+                    delta = Some(player_trans.translation - terrain_trans.translation);
+                }
+        
+                // if they have, regenerate the terrain
+                if let Some(delta) = delta {
+                    println!("Player has triggered terrain regeneration");
+                    regenerate_terrain(&mut commands, &mut meshes, &mut materials, &asset_server, &mut terrain, delta);
+                    break;
+                }
+            }
         }
     }
 }
@@ -75,28 +78,21 @@ fn regenerate_terrain(
     meshes: &mut ResMut<Assets<Mesh>>,
     materials: &mut ResMut<Assets<StandardMaterial>>,
     asset_server: &Res<AssetServer>,
-    terrain_no_player: &mut Query<(Entity,&mut Transform, &Handle<Mesh>), (Without<player::ContainsPlayer>, With<Terrain>)>,
-    terrain_w_player: &mut Query<(Entity,&mut Transform, &Handle<Mesh>), (With<player::ContainsPlayer>, With<Terrain>)>,
+    terrain: &mut Query<(Entity,&mut Transform, &Handle<Mesh>, &player::ContainsPlayer), With<Terrain>>,
     delta: Vec3
 ) {
     let collider_shape = ComputedColliderShape::TriMesh;
 
-    // shift over and regen terrain that didn't have the player
-    for (no_pl_ent, mut no_pl_trans, mh) in terrain_no_player.iter_mut() {
-        no_pl_trans.translation = no_pl_trans.translation + delta;
-        no_pl_trans.translation.y = 0.;
-        let mesh = meshes.get_mut(mh).unwrap();
-        let new_mesh = &mut generate_terrain_mesh(no_pl_trans.translation.x, no_pl_trans.translation.z, SIZE_NO_PLAYER, SUBDIVISIONS_LEVEL_2);
-        *mesh = new_mesh.clone();
-        commands.get_entity(no_pl_ent).unwrap().insert(Collider::from_bevy_mesh(&mesh, &collider_shape).unwrap());
-    }
-
-    // shift over and regen terrain that does have the player
-    for (pl_ent, mut pl_trans, mh) in terrain_w_player.iter_mut() {
+    // shift over and regen terrain
+    for (pl_ent, mut pl_trans, mh, contains_player) in terrain.iter_mut() {
         pl_trans.translation = pl_trans.translation + delta;
         pl_trans.translation.y = 0.;
         let mesh = meshes.get_mut(mh).unwrap();
-        let new_mesh = &mut generate_terrain_mesh(pl_trans.translation.x, pl_trans.translation.z, PLANE_SIZE, SUBDIVISIONS_LEVEL_1);
+        let mut subdivisions = SUBDIVISIONS_LEVEL_2;
+        if contains_player.0 {
+            subdivisions = SUBDIVISIONS_LEVEL_1
+        }
+        let new_mesh = &mut generate_terrain_mesh(pl_trans.translation.x, pl_trans.translation.z, PLANE_SIZE, subdivisions);
         *mesh = new_mesh.clone();
         commands.get_entity(pl_ent).unwrap().insert(Collider::from_bevy_mesh(&mesh, &collider_shape).unwrap());
     }
@@ -183,7 +179,7 @@ fn spawn_terrain_chunk(
         .insert(Terrain)
         .insert(Collider::from_bevy_mesh(&mesh, &collider_shape).unwrap()
     );
-    if contains_player { parent_terrain.insert(player::ContainsPlayer); }
+    parent_terrain.insert(player::ContainsPlayer(contains_player));
     parent_terrain.id()
     
 }

@@ -34,6 +34,8 @@ const WIND_LEAN: f32 = 0.0; // determines how already bent grass will be at 0 wi
 const CURVE_POWER: f32 = 1.0; // the linearity / exponentiality of the application/bend of the wind
 const DESPAWN_DISTANCE: f32 = 5. * GRASS_TILE_SIZE_1;
 const WIND_SIM_DISTANCE: f32 = 1.4*GRASS_TILE_SIZE_1;
+const GRID_SIZE_HALF: i32 = 2;
+
 // Grass Component
 #[derive(Component)]
 pub struct GrassData {
@@ -217,8 +219,8 @@ fn update_grass(
     if grass.is_empty() {
         let mut grass_grid = GrassGrid(HashMap::new());
         // generate grid of grass
-        for i in -5..5 {
-            for j in -5..5 {
+        for i in -GRID_SIZE_HALF..=GRID_SIZE_HALF {
+            for j in -GRID_SIZE_HALF..=GRID_SIZE_HALF {
                 let a = x + i as f32 * GRASS_TILE_SIZE_1;
                 let b = z + j as f32 * GRASS_TILE_SIZE_1;
                 grass_grid.0.insert((a as i32, b as i32), true);
@@ -243,8 +245,8 @@ fn update_grass(
                 if !contains_player.0 {
                     *contains_player = ContainsPlayer(true);
                     // generate new grass
-                    for i in -5..5 {
-                        for j in -5..5 {
+                    for i in -GRID_SIZE_HALF..=GRID_SIZE_HALF {
+                        for j in -GRID_SIZE_HALF..=GRID_SIZE_HALF {
                             let a = grass_trans.translation.x + i as f32 * GRASS_TILE_SIZE_1;
                             let b = grass_trans.translation.z + j as f32 * GRASS_TILE_SIZE_1;
                             if let false = *grass_grid.0.get(&(a as i32,b as i32)).unwrap_or(&false) {

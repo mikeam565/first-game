@@ -1,6 +1,7 @@
 ## Small deliverables
 - Rounded normal for grass
 ## Medium/Longer term
+* async task triggering instead of generating all new grass / terrain in the current frame
 * Performance Optimization
     - instancing grass -> https://bevyengine.org/examples/Shaders/shader-instancing/
 

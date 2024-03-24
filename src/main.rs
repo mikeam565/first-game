@@ -1,7 +1,7 @@
 mod entities;
 mod util;
 
-use bevy::{prelude::*, pbr::DirectionalLightShadowMap, diagnostic::{LogDiagnosticsPlugin, FrameTimeDiagnosticsPlugin}};
+use bevy::{diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin}, input::InputPlugin, pbr::DirectionalLightShadowMap, prelude::*};
 use bevy_atmosphere::prelude::*;
 use bevy_rapier3d::prelude::*;
 use bevy_inspector_egui::quick::WorldInspectorPlugin;

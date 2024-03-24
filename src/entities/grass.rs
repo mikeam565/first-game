@@ -2,13 +2,17 @@ use std::borrow::BorrowMut;
 
 use crate::entities::{terrain, player};
 use crate::{entities, util::perlin::sample_terrain_height};
+use bevy::ecs::system::{CommandQueue, SystemState};
 use bevy::render::primitives::Aabb;
+use bevy::render::render_asset::RenderAssetUsages;
+use bevy::tasks::{block_on, AsyncComputeTaskPool, Task};
 use bevy::{prelude::*, render::{render_resource::{PrimitiveTopology, Face}, mesh::{self, VertexAttributeValues}}, utils::HashMap};
 use noise::{Perlin, NoiseFn};
 use rand::{thread_rng, Rng};
 use crate::util::perlin::{PerlinNoiseEntity, self};
-
+use futures_lite::future::poll_once;
 use super::player::ContainsPlayer;
+use super::terrain::BASE_LEVEL;
 
 // Grass constants
 const GRASS_TILE_SIZE_1: f32 = 32.;
@@ -59,7 +63,7 @@ pub fn generate_grass(
 ) -> (PbrBundle, Grass, GrassData) {
     let mut grass_offsets = vec![];
     let mut rng = thread_rng();
-    let mut mesh = if !entities::util::ENABLE_WIREFRAME { Mesh::new(PrimitiveTopology::TriangleList) } else { Mesh::new(PrimitiveTopology::LineList)};
+    let mut mesh = if !entities::util::ENABLE_WIREFRAME { Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::RENDER_WORLD | RenderAssetUsages::MAIN_WORLD) } else { Mesh::new(PrimitiveTopology::LineList, RenderAssetUsages::RENDER_WORLD | RenderAssetUsages::MAIN_WORLD)};
     let mut all_verts: Vec<Vec3> = vec![];
     let mut all_indices: Vec<u32> = vec![];
     let mut blade_number = 0;
@@ -191,7 +195,7 @@ pub fn generate_grass_geometry(verts: &Vec<Vec3>, vec_indices: Vec<u32>, mesh: &
 
     let colors: Vec<[f32; 4]> = generate_vertex_colors(&positions, grass_offsets);
 
-    mesh.set_indices(Some(indices));
+    mesh.insert_indices(indices);
     mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
     mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, colors);
     mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
@@ -231,12 +235,13 @@ fn update_grass(
                     .insert(main_grass)
                     .insert(main_data)
                     .insert(ContainsPlayer(contains_player))
-                    // .insert(AabbGizmo {color: Some(color)})
+                    // .insert(ShowAabbGizmo {color: Some(color)})
                     ;
             }
         }
         commands.spawn(grass_grid);
     } else {
+        let thread_pool = AsyncComputeTaskPool::get();
         let mut grass_grid = grid.get_single_mut().unwrap();
         let elapsed_time = time.elapsed_seconds_f64();
         let mut grass_w_player: Option<Entity> = None;
@@ -254,6 +259,33 @@ fn update_grass(
                         for j in -GRID_SIZE_HALF..=GRID_SIZE_HALF {
                             let a = grass_trans.translation.x + i as f32 * GRASS_TILE_SIZE_1;
                             let b = grass_trans.translation.z + j as f32 * GRASS_TILE_SIZE_1;
+                            // let transform = Transform::from_xyz(a,BASE_LEVEL,b);
+
+                            // let task_entity = commands.spawn_empty().id();
+                            // let task = thread_pool.spawn(async move {
+                            //     let mut command_queue = CommandQueue::default();
+
+                            //     command_queue.push(move |world: &mut World| {
+                            //         let (grass_mesh_handle, grass_material_handle) = {
+                            //             let mut system_state = SystemState::<(Res<GrassMeshHandle>,Res<GrassMaterialHandle>,)>::new(world);
+                            //             let (grass_mesh_handle, grass_material_handle) = system_state.get_mut(world);
+
+                            //             (grass_mesh_handle.clone(), grass_material_handle.clone())
+                            //         };
+
+                            //         world.entity_mut(task_entity)
+                            //         .insert(PbrBundle {
+                            //             mesh: grass_mesh_handle,
+                            //             material: grass_material_handle,
+                            //             transform,
+                            //             ..default()
+                            //         }).remove::<GenGrassTask>();
+                            //     });
+
+                            //     command_queue
+                            // });
+
+                            // commands.entity(task_entity).insert(GenGrassTask(task));
                             if let false = *grass_grid.0.get(&(a as i32,b as i32)).unwrap_or(&false) {
                                 grass_grid.0.insert((a as i32, b as i32), true);
                                 let (main_mat, main_grass, main_data) = generate_grass(&mut commands, &mut meshes, &mut materials, a, b, NUM_GRASS_1, GRASS_TILE_SIZE_1);
@@ -261,7 +293,7 @@ fn update_grass(
                                     .insert(main_grass)
                                     .insert(main_data)
                                     .insert(ContainsPlayer(false))
-                                    // .insert(AabbGizmo {color: Some(Color::PURPLE)})
+                                    // .insert(ShowAabbGizmo {color: Some(Color::PURPLE)})
                                     ;
                             }
                         }
@@ -274,8 +306,9 @@ fn update_grass(
             }
             // simulate wind only if close enough and if visible
             if (player_trans.translation.x - grass_trans.translation.x).abs() < WIND_SIM_DISTANCE && (player_trans.translation.z - grass_trans.translation.z).abs() < WIND_SIM_DISTANCE && visibility.get() {
-                let mesh = meshes.get_mut(mh).unwrap();
-                apply_wind(mesh, grass_data, &perlin, elapsed_time);
+                if let Some(mesh) = meshes.get_mut(mh) {
+                    apply_wind(mesh, grass_data, &perlin, elapsed_time);
+                }
             } else if (player_trans.translation.x - grass_trans.translation.x).abs() > DESPAWN_DISTANCE || (player_trans.translation.z - grass_trans.translation.z).abs() > DESPAWN_DISTANCE {
                 grass_grid.0.insert((grass_trans.translation.x as i32, grass_trans.translation.z as i32), false);
                 commands.get_entity(ent).unwrap().despawn_recursive();
@@ -290,9 +323,24 @@ fn update_grass(
     }
 }
 
-// if (player_trans.translation.x - terrain_trans.translation.x).abs() > PLANE_SIZE/4. || (player_trans.translation.z - terrain_trans.translation.z).abs() > PLANE_SIZE/4. {
-//     delta = Some(player_trans.translation - terrain_trans.translation);
-// }
+fn handle_tasks(mut commands: Commands, mut transform_tasks: Query<&mut GenGrassTask>) {
+    for mut task in &mut transform_tasks {
+        if let Some(mut commands_queue) = block_on(poll_once(&mut task.0)) {
+            // append the returned command queue to have it execute later
+            commands.append(&mut commands_queue);
+        }
+    }
+}
+
+#[derive(Component)]
+struct GenGrassTask(Task<CommandQueue>);
+
+#[derive(Resource, Deref)]
+struct GrassMeshHandle(Handle<Mesh>);
+
+#[derive(Resource, Deref)]
+struct GrassMaterialHandle(Handle<StandardMaterial>);
+
 
 fn generate_vertex_colors(positions: &Vec<[f32; 3]>, grass_offsets: &Vec<[f32; 3]>) -> Vec<[f32; 4]> {
     positions.iter().enumerate().map(|(i,[x,y,z])| {

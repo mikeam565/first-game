@@ -7,10 +7,11 @@ edition = "2021"
 
 [dependencies]
 # remember to revert dynamic_linking before game release
-bevy = { version = "0.12.0", features = ["dynamic_linking", "trace"] }
-bevy-inspector-egui = "0.21.0"
-bevy_atmosphere = "0.8.1"
-bevy_rapier3d = {version="0.23.0", features=["debug-render-3d"]}
+bevy = { version = "0.13.1", features = ["dynamic_linking", "trace"] }
+bevy_rapier3d = {version="0.25.0", features=["debug-render-3d"]}
+futures-lite = "1.4.0"
+bevy-inspector-egui = "0.23.3"
+bevy_atmosphere = "0.9"
 bytemuck = "1.15.0"
 noise = "0.8.2"
 rand = "0.8.5"

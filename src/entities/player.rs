@@ -2,6 +2,7 @@ use std::f32::consts::{PI, TAU};
 
 use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
+use bevy_rapier3d::control::KinematicCharacterController;
 use crate::{entities as ent, util::{camera::setup_camera, gravity::{GRAVITY_DIR, GRAVITY_ACC}}};
 
 const SPEED: f32 = 50.0;
@@ -33,7 +34,7 @@ pub fn setup_player(
     let mesh = Mesh::from(shape::Box::new(PLAYER_WIDTH, PLAYER_HEIGHT, PLAYER_WIDTH));
     commands.spawn(PbrBundle {
         mesh: meshes.add(mesh.clone()),
-        material: materials.add(Color::rgb_u8(124, 144, 255).into()),
+        material: materials.add(Color::rgb_u8(124, 144, 255)),
         ..default()
     })
     .insert(transform.clone())
@@ -46,7 +47,7 @@ pub fn setup_player(
 
 fn player_movement(
     mut commands: Commands,
-    keys: Res<Input<KeyCode>>,
+    keys: Res<ButtonInput<KeyCode>>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut set: ParamSet<(
@@ -71,16 +72,16 @@ fn player_movement(
         // }
 
         // movement
-        if keys.pressed(KeyCode::W) {
+        if keys.pressed(KeyCode::KeyW) {
             movement = movement + plyr_trans.rotation * -Vec3::Z * SPEED * time.delta_seconds();
         }
-        if keys.pressed(KeyCode::S) {
+        if keys.pressed(KeyCode::KeyS) {
             movement = movement + plyr_trans.rotation * Vec3::Z * SPEED * time.delta_seconds();
         }
-        if keys.pressed(KeyCode::A) {
+        if keys.pressed(KeyCode::KeyA) {
             movement = movement + plyr_trans.rotation * -Vec3::X * SPEED * time.delta_seconds();
         }
-        if keys.pressed(KeyCode::D) {
+        if keys.pressed(KeyCode::KeyD) {
             movement = movement + plyr_trans.rotation * Vec3::X * SPEED * time.delta_seconds();
         }
 
@@ -102,7 +103,7 @@ fn player_movement(
 
 fn read_result_system(
     mut commands: Commands,
-    keys: Res<Input<KeyCode>>,
+    keys: Res<ButtonInput<KeyCode>>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut set: ParamSet<(
@@ -120,10 +121,10 @@ fn read_result_system(
         // println!("Entity {:?} moved by {:?} and touches the ground: {:?}", player, ctrlr_output.effective_translation, ctrlr_output.grounded);
         effective_trans = ctrlr_output.effective_translation;
         
-        if keys.pressed(KeyCode::Q) {
+        if keys.pressed(KeyCode::KeyQ) {
             rotation += ROTATION_SPEED*TAU*time.delta_seconds();
         }
-        if keys.pressed(KeyCode::E) {
+        if keys.pressed(KeyCode::KeyE) {
             rotation += -ROTATION_SPEED*TAU*time.delta_seconds();
         }
         if rotation != 0. {
@@ -141,7 +142,7 @@ fn read_result_system(
     
         cam_trans.rotate_around(new_player_trans.translation, Quat::from_rotation_y(rotation));
         // for top view
-        let looking_dir = new_player_trans.forward() - Vec3::Y*0.2;
+        let looking_dir = new_player_trans.forward().normalize() - Vec3::Y*0.2;
         cam_trans.look_to(looking_dir, Vec3::Y);
     }
 

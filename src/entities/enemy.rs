@@ -26,7 +26,7 @@ pub fn setup_enemies(
     let collider_shape = &ComputedColliderShape::TriMesh;
     commands.spawn(PbrBundle {
         mesh: meshes.add(mesh.clone()),
-        material: materials.add(Color::RED.into()),
+        material: materials.add(Color::RED),
         transform: Transform::from_xyz(20.0, 200. + ENEMY_HEIGHT + 5., 20.0),
         ..default()
     })

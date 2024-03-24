@@ -6,7 +6,7 @@ use bevy::asset::LoadState;
 use crate::entities::player::Player;
 
 const CAMERA_SPEED: f32 = 10.0;
-const CAMERA_HEIGHT: f32 = 3.0;
+const CAMERA_HEIGHT: f32 = 5.0;
 const VIEW_DISTANCE: f32 = 300000.;
 
 pub fn setup_camera(

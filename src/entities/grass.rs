@@ -11,10 +11,10 @@ use crate::util::perlin::{PerlinNoiseEntity, self};
 use super::player::ContainsPlayer;
 
 // Grass constants
-const GRASS_TILE_SIZE_1: f32 = 64.;
-const GRASS_TILE_SIZE_2: f32 = 64.; // TODO: like terrain, this causes overlaps if bigger than SIZE_1
-const NUM_GRASS_1: u32 = 128; // number of grass blades in one row of a tile
-const NUM_GRASS_2: u32 = 128;
+const GRASS_TILE_SIZE_1: f32 = 32.;
+const GRASS_TILE_SIZE_2: f32 = 32.; // TODO: like terrain, this causes overlaps if bigger than SIZE_1
+const NUM_GRASS_1: u32 = 64; // number of grass blades in one row of a tile
+const NUM_GRASS_2: u32 = 32;
 const GRASS_BLADE_VERTICES: u32 = 3;
 const GRASS_WIDTH: f32 = 0.3;
 const GRASS_HEIGHT: f32 = 2.4;
@@ -25,16 +25,16 @@ const GRASS_SCALE_FACTOR: f32 = 1.0;
 const GRASS_HEIGHT_VARIATION_FACTOR: f32 = 0.2;
 const GRASS_STRAIGHTNESS: f32 = 10.0; // for now, as opposed to a curve factor, just modifying denominator for curve calcs
 const GRASS_SPACING: f32 = 0.3;
-const GRASS_OFFSET: f32 = 0.1;
+const GRASS_OFFSET: f32 = 0.2;
 const ENABLE_WIREFRAME: bool = false;
 const WIND_STRENGTH: f32 = 0.5;
 const WIND_SPEED: f64 = 0.5;
 const WIND_CONSISTENCY: f64 = 10.0; //
 const WIND_LEAN: f32 = 0.0; // determines how already bent grass will be at 0 wind
 const CURVE_POWER: f32 = 1.0; // the linearity / exponentiality of the application/bend of the wind
-const DESPAWN_DISTANCE: f32 = 5. * GRASS_TILE_SIZE_1;
-const WIND_SIM_DISTANCE: f32 = 1.4*GRASS_TILE_SIZE_1;
-const GRID_SIZE_HALF: i32 = 2;
+const DESPAWN_DISTANCE: f32 = GRID_SIZE_HALF as f32 * GRASS_TILE_SIZE_1 + 0.01;
+const WIND_SIM_DISTANCE: f32 = (GRID_SIZE_HALF/3) as f32 * GRASS_TILE_SIZE_1;
+const GRID_SIZE_HALF: i32 = 10;
 
 // Grass Component
 #[derive(Component)]
@@ -227,10 +227,15 @@ fn update_grass(
                 let contains_player = (player_trans.translation.x - a).abs() < GRASS_TILE_SIZE_1/2. && (player_trans.translation.z - b).abs() < GRASS_TILE_SIZE_1/2.;
                 let color = if contains_player { Color::RED } else { Color::PURPLE };
                 let (main_mat, main_grass, main_data) = generate_grass(&mut commands, &mut meshes, &mut materials, a, b, NUM_GRASS_1, GRASS_TILE_SIZE_1);
-                commands.spawn(main_mat).insert(main_grass).insert(main_data).insert(ContainsPlayer(contains_player)).insert(AabbGizmo {color: Some(color)});
+                commands.spawn(main_mat)
+                    .insert(main_grass)
+                    .insert(main_data)
+                    .insert(ContainsPlayer(contains_player))
+                    // .insert(AabbGizmo {color: Some(color)})
+                    ;
             }
         }
-        commands.spawn(grass_grid);     
+        commands.spawn(grass_grid);
     } else {
         let mut grass_grid = grid.get_single_mut().unwrap();
         let elapsed_time = time.elapsed_seconds_f64();
@@ -252,7 +257,12 @@ fn update_grass(
                             if let false = *grass_grid.0.get(&(a as i32,b as i32)).unwrap_or(&false) {
                                 grass_grid.0.insert((a as i32, b as i32), true);
                                 let (main_mat, main_grass, main_data) = generate_grass(&mut commands, &mut meshes, &mut materials, a, b, NUM_GRASS_1, GRASS_TILE_SIZE_1);
-                                commands.spawn(main_mat).insert(main_grass).insert(main_data).insert(ContainsPlayer(false)).insert(AabbGizmo {color: Some(Color::PURPLE)});
+                                commands.spawn(main_mat)
+                                    .insert(main_grass)
+                                    .insert(main_data)
+                                    .insert(ContainsPlayer(false))
+                                    // .insert(AabbGizmo {color: Some(Color::PURPLE)})
+                                    ;
                             }
                         }
                     }
@@ -274,7 +284,7 @@ fn update_grass(
 
         if let Some(grass_w_player) = grass_w_player {
             // update aabb color
-            commands.get_entity(grass_w_player).unwrap().insert(AabbGizmo {color: Some(Color::RED)});
+            // commands.get_entity(grass_w_player).unwrap().insert(AabbGizmo {color: Some(Color::RED)});
         }
 
     }

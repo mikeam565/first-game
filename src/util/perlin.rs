@@ -3,7 +3,7 @@ use noise::{NoiseFn, Perlin};
 use crate::entities::terrain;
 pub const WIND_SEED: u32 = 0;
 pub const GRASS_HEIGHT_SEED: u32 = 1;
-pub const TERRAIN_SEED: u32 = 1231;
+pub const TERRAIN_SEED: u32 = 49;
 const HILL_HEIGHTS: f32 = 10.0;
 const TERRAIN_BUMPINESS: f32 = 2.0;
 const MOUNTAIN_HEIGHTS: f32 = 256.;
@@ -44,11 +44,11 @@ fn hill_component(terrain_perlin: &Perlin, x: f32, z: f32) -> f32 {
 
 fn mountain_component(terrain_perlin: &Perlin, x: f32, z: f32) -> f32 {
     let mountain_sample = sample_mountain(terrain_perlin, x, z);
-    if mountain_sample < 1. { MOUNTAIN_HEIGHTS * mountain_sample/(1. - mountain_sample)} else { MOUNTAIN_HEIGHTS }
+    MOUNTAIN_HEIGHTS * mountain_sample/(1.4 - mountain_sample)
 }
 
 fn sample_mountain(terrain_perlin: &Perlin, x: f32, z: f32) -> f32 {
-    terrain_perlin.get([z as f64 / 4096., x as f64 / 4096.]) as f32
+    terrain_perlin.get([x as f64 / 4096., z as f64 / 4096.]) as f32
 }
 
 pub fn setup_perlin(mut commands: Commands) {

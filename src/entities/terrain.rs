@@ -10,7 +10,7 @@ use bevy_rapier3d::prelude::*;
 
 pub const PLANE_SIZE: f32 = 6000.;
 pub const SIZE_NO_PLAYER: f32 = 6000.; // TODO: This actually causes overlaps if it is bigger than PLANE_SIZE
-const SUBDIVISIONS_LEVEL_1: u32 = 512;
+const SUBDIVISIONS_LEVEL_1: u32 = 1024;
 const SUBDIVISIONS_LEVEL_2: u32 = 256;
 const SUBDIVISIONS_LEVEL_3: u32 = 2;
 const TILE_WIDTH: u32 = 4; // how wide a tile should be

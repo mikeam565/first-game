@@ -1,10 +1,10 @@
-## Small deliverables
-- Rounded normal for grass
-## Medium/Longer term
-* async task triggering instead of generating all new grass / terrain in the current frame
-* Performance Optimization
-    - instancing grass -> https://bevyengine.org/examples/Shaders/shader-instancing/
 
+## Possible deliverables
+* Rounded normal for grass blades?
+* Choose skybox image
+* Performance Optimization (priority)
+    - async task triggering (eg. for grass grid updates) https://docs.rs/bevy/latest/src/async_compute/async_compute.rs.html#53
+    - instancing grass -> https://bevyengine.org/examples/Shaders/shader-instancing/
 ## Notes
 * Queries
     - Queries cannot conflict -> Had the Camera controller query Transforms, as well as the Player controller, and it was not happy. Had to put camera logic in player logic.

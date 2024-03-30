@@ -24,7 +24,7 @@ fn setup_directional_light() -> DirectionalLightBundle {
             ..default()
         },
         transform: Transform::from_xyz(0.0,0.0,0.0)
-            .looking_at(Vec3::new(-0.2,-1.0,-1.0), Vec3::Y),
+            .looking_at(Vec3::new(0.2,-0.3,1.0), Vec3::Y),
         cascade_shadow_config,
         ..default()
     }

@@ -12,15 +12,14 @@ use rand::{thread_rng, Rng};
 use crate::util::perlin::{PerlinNoiseEntity, self};
 use futures_lite::future::poll_once;
 use super::player::ContainsPlayer;
-use super::terrain::BASE_LEVEL;
 
 // Grass constants
 const GRASS_TILE_SIZE_1: f32 = 32.;
 const GRASS_TILE_SIZE_2: f32 = 32.; // TODO: like terrain, this causes overlaps if bigger than SIZE_1
-const NUM_GRASS_1: u32 = 64; // number of grass blades in one row of a tile
+const NUM_GRASS_1: u32 = 128; // number of grass blades in one row of a tile
 const NUM_GRASS_2: u32 = 32;
 const GRASS_BLADE_VERTICES: u32 = 3;
-const GRASS_WIDTH: f32 = 0.3;
+const GRASS_WIDTH: f32 = 0.1;
 const GRASS_HEIGHT: f32 = 2.4;
 const GRASS_BASE_COLOR_1: [f32;4] = [0.102,0.153,0.,1.];
 const GRASS_BASE_COLOR_2: [f32;4] = [0.,0.019,0.,1.];
@@ -36,9 +35,20 @@ const WIND_SPEED: f64 = 0.5;
 const WIND_CONSISTENCY: f64 = 10.0; //
 const WIND_LEAN: f32 = 0.0; // determines how already bent grass will be at 0 wind
 const CURVE_POWER: f32 = 1.0; // the linearity / exponentiality of the application/bend of the wind
-const DESPAWN_DISTANCE: f32 = GRID_SIZE_HALF as f32 * GRASS_TILE_SIZE_1 + 0.01;
+const DESPAWN_DISTANCE: f32 = (GRID_SIZE_HALF+1) as f32 * GRASS_TILE_SIZE_1 + GRID_SIZE_HALF as f32;
 const WIND_SIM_DISTANCE: f32 = (GRID_SIZE_HALF/3) as f32 * GRASS_TILE_SIZE_1;
-const GRID_SIZE_HALF: i32 = 10;
+const GRID_SIZE_HALF: i32 = 8;
+
+fn grass_material() -> StandardMaterial {
+    StandardMaterial {
+        base_color: Color::WHITE,
+        double_sided: false,
+        perceptual_roughness: 1.0,
+        reflectance: 0.5,
+        cull_mode: None,
+        ..default()
+    }
+}
 
 // Grass Component
 #[derive(Component)]
@@ -52,15 +62,12 @@ pub struct Grass;
 
 // Grass offsets component
 
-pub fn generate_grass(
-    commands: &mut Commands,
-    meshes: &mut ResMut<Assets<Mesh>>,
-    materials: &mut ResMut<Assets<StandardMaterial>>,
+pub fn generate_grass_mesh(
     spawn_x: f32,
     spawn_z: f32,
     density: u32,
     tile_size: f32,
-) -> (PbrBundle, Grass, GrassData) {
+) -> (Mesh, GrassData) {
     let mut grass_offsets = vec![];
     let mut rng = thread_rng();
     let mut mesh = if !entities::util::ENABLE_WIREFRAME { Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::RENDER_WORLD | RenderAssetUsages::MAIN_WORLD) } else { Mesh::new(PrimitiveTopology::LineList, RenderAssetUsages::RENDER_WORLD | RenderAssetUsages::MAIN_WORLD)};
@@ -95,14 +102,27 @@ pub fn generate_grass(
 
     generate_grass_geometry(&all_verts, all_indices, &mut mesh, &grass_offsets);
 
-    let grass_material = StandardMaterial {
-        base_color: Color::WHITE,
-        double_sided: false,
-        perceptual_roughness: 1.0,
-        reflectance: 0.5,
-        cull_mode: None,
-        ..default()
-    };
+    (
+        mesh,
+        GrassData {
+            initial_vertices: all_verts,
+            initial_positions: grass_offsets
+        }
+    )
+}
+
+pub fn generate_grass(
+    commands: &mut Commands,
+    meshes: &mut ResMut<Assets<Mesh>>,
+    materials: &mut ResMut<Assets<StandardMaterial>>,
+    spawn_x: f32,
+    spawn_z: f32,
+    density: u32,
+    tile_size: f32,
+) -> (PbrBundle, Grass, GrassData) {
+    let (mesh, grass_data) = generate_grass_mesh(spawn_x, spawn_z, density, tile_size);
+
+    let grass_material = grass_material();
 
     let bundle = PbrBundle {
         mesh: meshes.add(mesh),
@@ -114,28 +134,26 @@ pub fn generate_grass(
     (
         bundle,
         Grass {},
-        GrassData {
-            initial_vertices: all_verts,
-            initial_positions: grass_offsets
-        }
+        grass_data
     )
 
 }
 
 pub fn generate_single_blade_verts(x: f32, y: f32, z: f32, blade_number: u32, blade_height: f32) -> (Vec<Vec3>, Vec<u32>) {
     // For grass with 7 vertices, uncomment t3-6, and uncomment indices
-    let blade_number_shift = blade_number*GRASS_BLADE_VERTICES;
     // vertex transforms
     let t1 = Transform::from_xyz(x, y, z);
     let t2 = Transform::from_xyz(x+GRASS_WIDTH, y, z);
     // let t3 = Transform::from_xyz(x, y+blade_height/3.0, z);
     // let t4 = Transform::from_xyz(x+GRASS_WIDTH, y+blade_height/3.0, z);
-    // let t5 = Transform::from_xyz(x, y+2.0*blade_height/3.0, z);
-    // let t6 = Transform::from_xyz(x + GRASS_WIDTH, y+2.0*blade_height/3.0, z);
+    let t5 = Transform::from_xyz(x, y+2.0*blade_height/3.0, z);
+    let t6 = Transform::from_xyz(x + GRASS_WIDTH, y+2.0*blade_height/3.0, z);
     let t7 = Transform::from_xyz(x+(GRASS_WIDTH/2.0), y+blade_height, z);
-
+    
     // let mut transforms = vec![t1,t2,t3,t4,t5,t6,t7];
-    let mut transforms = vec![t1,t2,t7];
+    let mut transforms = vec![t1,t2,t5,t6,t7];
+    // let mut transforms = vec![t1,t2,t7];
+    let blade_number_shift = blade_number*transforms.len() as u32;
     
     // // physical randomization of grass blades
     // rotate grass randomly around y
@@ -151,9 +169,8 @@ pub fn generate_single_blade_verts(x: f32, y: f32, z: f32, blade_number: u32, bl
 
     let indices: Vec<u32> = vec![
         blade_number_shift+0, blade_number_shift+1, blade_number_shift+2,
-        // blade_number_shift+2, blade_number_shift+1, blade_number_shift+3,
-        // blade_number_shift+2, blade_number_shift+3, blade_number_shift+4,
-        // blade_number_shift+4, blade_number_shift+2, blade_number_shift+3,
+        blade_number_shift+2, blade_number_shift+1, blade_number_shift+3,
+        blade_number_shift+2, blade_number_shift+3, blade_number_shift+4,
         // blade_number_shift+4, blade_number_shift+3, blade_number_shift+5,
         // blade_number_shift+4, blade_number_shift+5, blade_number_shift+6,
     ];
@@ -259,42 +276,51 @@ fn update_grass(
                         for j in -GRID_SIZE_HALF..=GRID_SIZE_HALF {
                             let a = grass_trans.translation.x + i as f32 * GRASS_TILE_SIZE_1;
                             let b = grass_trans.translation.z + j as f32 * GRASS_TILE_SIZE_1;
-                            // let transform = Transform::from_xyz(a,BASE_LEVEL,b);
-
-                            // let task_entity = commands.spawn_empty().id();
-                            // let task = thread_pool.spawn(async move {
-                            //     let mut command_queue = CommandQueue::default();
-
-                            //     command_queue.push(move |world: &mut World| {
-                            //         let (grass_mesh_handle, grass_material_handle) = {
-                            //             let mut system_state = SystemState::<(Res<GrassMeshHandle>,Res<GrassMaterialHandle>,)>::new(world);
-                            //             let (grass_mesh_handle, grass_material_handle) = system_state.get_mut(world);
-
-                            //             (grass_mesh_handle.clone(), grass_material_handle.clone())
-                            //         };
-
-                            //         world.entity_mut(task_entity)
-                            //         .insert(PbrBundle {
-                            //             mesh: grass_mesh_handle,
-                            //             material: grass_material_handle,
-                            //             transform,
-                            //             ..default()
-                            //         }).remove::<GenGrassTask>();
-                            //     });
-
-                            //     command_queue
-                            // });
-
-                            // commands.entity(task_entity).insert(GenGrassTask(task));
                             if let false = *grass_grid.0.get(&(a as i32,b as i32)).unwrap_or(&false) {
                                 grass_grid.0.insert((a as i32, b as i32), true);
-                                let (main_mat, main_grass, main_data) = generate_grass(&mut commands, &mut meshes, &mut materials, a, b, NUM_GRASS_1, GRASS_TILE_SIZE_1);
-                                commands.spawn(main_mat)
-                                    .insert(main_grass)
-                                    .insert(main_data)
-                                    .insert(ContainsPlayer(false))
-                                    // .insert(ShowAabbGizmo {color: Some(Color::PURPLE)})
-                                    ;
+                                // todo: async way
+                                let transform = Transform::from_xyz(a,0.,b);
+    
+                                let task_entity = commands.spawn_empty().id();
+                                let task = thread_pool.spawn(async move {
+                                    let mut command_queue = CommandQueue::default();
+                                    let (mesh, grass_data) = generate_grass_mesh(a, b, NUM_GRASS_1, GRASS_TILE_SIZE_1);
+    
+                                    command_queue.push(move |world: &mut World| {
+                                        let (grass_mesh_handle, grass_mat_handle) = {
+                                            let mut system_state = SystemState::<(ResMut<Assets<Mesh>>, ResMut<Assets<StandardMaterial>>)>::new(world);
+                                            let (mut meshes, mut mats) = system_state.get_mut(world);
+    
+                                            (meshes.add(mesh), mats.add(grass_material()))
+                                        };
+    
+                                        world.entity_mut(task_entity)
+                                        .insert(PbrBundle {
+                                            mesh: grass_mesh_handle,
+                                            material: grass_mat_handle,
+                                            transform,
+                                            ..default()
+                                        })
+                                        .insert(Grass)
+                                        .insert(grass_data)
+                                        .insert(ContainsPlayer(false))
+                                        // .insert(ShowAabbGizmo {color: Some(Color::PURPLE)})
+                                        .remove::<GenGrassTask>();
+                                    });
+    
+                                    command_queue
+                                });
+    
+                                commands.entity(task_entity).insert(GenGrassTask(task)); // spawn a task marked GenGrassTask in the world to be handled by handle_tasks fn when complete
+
+                            //     // old way (sync)
+                            //     let (main_mat, main_grass, main_data) = generate_grass(&mut commands, &mut meshes, &mut materials, a, b, NUM_GRASS_1, GRASS_TILE_SIZE_1);
+                            //     commands.spawn(main_mat)
+                            //         .insert(main_grass)
+                            //         .insert(main_data)
+                            //         .insert(ContainsPlayer(false))
+                            //         // .insert(ShowAabbGizmo {color: Some(Color::PURPLE)})
+                            //         ;
                             }
                         }
                     }
@@ -391,6 +417,6 @@ pub struct GrassPlugin;
 
 impl Plugin for GrassPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, update_grass);
+        app.add_systems(Update, (update_grass,handle_tasks));
     }
 }

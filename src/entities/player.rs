@@ -5,7 +5,7 @@ use bevy_rapier3d::prelude::*;
 use bevy_rapier3d::control::KinematicCharacterController;
 use crate::{entities as ent, util::{camera::setup_camera, gravity::{GRAVITY_DIR, GRAVITY_ACC}}};
 
-const SPEED: f32 = 50.0;
+const SPEED: f32 = 20.0;
 const ROTATION_SPEED: f32 = 0.3;
 const FIRE_RATE: f32 = 0.5;
 const PLAYER_HEIGHT: f32 = 3.0;

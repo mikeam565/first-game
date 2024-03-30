@@ -16,7 +16,6 @@ pub fn setup_camera(
     player: Query<&Transform, Added<Player>>
 ) {
     if !player.is_empty() {
-        let skybox_image: Handle<Image> = asset_server.load("skybox/day.png");
         let player_transform = player.get_single().unwrap();
 
         commands.spawn((
@@ -48,8 +47,6 @@ pub fn setup_camera(
                 ..default()
             }
         ));
-
-        commands.spawn((skybox_image));
     }
 }
 

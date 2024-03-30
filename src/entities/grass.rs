@@ -16,7 +16,7 @@ use super::player::ContainsPlayer;
 // Grass constants
 const GRASS_TILE_SIZE_1: f32 = 32.;
 const GRASS_TILE_SIZE_2: f32 = 32.; // TODO: like terrain, this causes overlaps if bigger than SIZE_1
-const NUM_GRASS_1: u32 = 96; // number of grass blades in one row of a tile
+const NUM_GRASS_1: u32 = 64; // number of grass blades in one row of a tile
 const NUM_GRASS_2: u32 = 32;
 const GRASS_BLADE_VERTICES: u32 = 3;
 const GRASS_WIDTH: f32 = 0.3;
@@ -72,7 +72,9 @@ pub fn generate_grass_mesh(
 ) -> (Mesh, GrassData) {
     let mut grass_offsets = vec![];
     let mut rng = thread_rng();
-    let mut mesh = if !entities::util::ENABLE_WIREFRAME { Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::RENDER_WORLD | RenderAssetUsages::MAIN_WORLD) } else { Mesh::new(PrimitiveTopology::LineList, RenderAssetUsages::RENDER_WORLD | RenderAssetUsages::MAIN_WORLD)};
+    let asset_usage = RenderAssetUsages::RENDER_WORLD | RenderAssetUsages::MAIN_WORLD;
+    // let asset_usage = RenderAssetUsages::RENDER_WORLD;
+    let mut mesh = Mesh::new(PrimitiveTopology::TriangleList, asset_usage);
     let mut all_verts: Vec<Vec3> = vec![];
     let mut all_indices: Vec<u32> = vec![];
     let mut blade_number = 0;
@@ -114,7 +116,6 @@ pub fn generate_grass_mesh(
 }
 
 pub fn generate_grass(
-    commands: &mut Commands,
     meshes: &mut ResMut<Assets<Mesh>>,
     materials: &mut ResMut<Assets<StandardMaterial>>,
     spawn_x: f32,
@@ -249,7 +250,7 @@ fn update_grass(
                 grass_grid.0.insert((a as i32, b as i32), true);
                 let contains_player = (player_trans.translation.x - a).abs() < GRASS_TILE_SIZE_1/2. && (player_trans.translation.z - b).abs() < GRASS_TILE_SIZE_1/2.;
                 let color = if contains_player { Color::RED } else { Color::PURPLE };
-                let (main_mat, main_grass, main_data) = generate_grass(&mut commands, &mut meshes, &mut materials, a, b, NUM_GRASS_1, GRASS_TILE_SIZE_1);
+                let (main_mat, main_grass, main_data) = generate_grass(&mut meshes, &mut materials, a, b, NUM_GRASS_1, GRASS_TILE_SIZE_1);
                 commands.spawn(main_mat)
                     .insert(main_grass)
                     .insert(main_data)

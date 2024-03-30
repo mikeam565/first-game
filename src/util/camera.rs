@@ -13,12 +13,11 @@ pub fn setup_camera(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
     mut images: ResMut<Assets<Image>>,
-    player: Query<&Transform, Added<Player>>
+    player: Query<(Entity, &Transform), Added<Player>>
 ) {
     if !player.is_empty() {
-        let player_transform = player.get_single().unwrap();
-
-        commands.spawn((
+        let (player_entity, player_transform) = player.get_single().unwrap();
+        let cam = commands.spawn((
             Camera3dBundle {
                 camera: Camera {
                     hdr: true,
@@ -29,13 +28,12 @@ pub fn setup_camera(
                     post_saturation: 1.5,
                     ..default()
                 },
-                transform: Transform::from_xyz(10., 205. + CAMERA_HEIGHT*2.0, 24.)
-                    .looking_at(player_transform.translation, Vec3::Y),
                 tonemapping: Tonemapping::TonyMcMapface, // 2. Using a tonemapper that desaturates to white is recommended
                 projection: bevy::prelude::Projection::Perspective(PerspectiveProjection {
                     far: VIEW_DISTANCE,
                     ..default()
                 }),
+                transform: Transform::from_xyz(2.8, 2.2, 5.1).with_rotation(Quat::from_rotation_x(0.1)),
                 ..default()
             },
             AtmosphereCamera {
@@ -46,7 +44,8 @@ pub fn setup_camera(
                 // composite_mode: BloomCompositeMode::Additive,
                 ..default()
             }
-        ));
+        )).id();
+        commands.get_entity(player_entity).unwrap().add_child(cam);
     }
 }
 

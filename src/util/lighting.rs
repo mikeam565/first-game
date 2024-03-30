@@ -50,7 +50,7 @@ fn setup_moon() -> (DirectionalLightBundle,Moon) {
     (
         DirectionalLightBundle {
             directional_light: DirectionalLight {
-                color: Color::rgb(0./255.,233./255.,234./255.),
+                color: Color::rgb(225./255.,255./255.,255./255.),
                 shadows_enabled: true,
                 illuminance: 10000.0,
                 ..default()

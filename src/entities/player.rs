@@ -3,7 +3,9 @@ use std::f32::consts::{PI, TAU};
 use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
 use bevy_rapier3d::control::KinematicCharacterController;
-use crate::{entities as ent, util::{camera::setup_camera, gravity::{GRAVITY_DIR, GRAVITY_ACC}}};
+use noise::NoiseFn;
+use rand::{thread_rng, Rng};
+use crate::{entities as ent, util::{camera::setup_camera, gravity::{GRAVITY_ACC, GRAVITY_DIR}, perlin::{self, PerlinNoiseEntity}}};
 
 const SPEED: f32 = 20.0;
 const ROTATION_SPEED: f32 = 0.3;
@@ -13,7 +15,8 @@ const PLAYER_WIDTH: f32 = 1.0;
 const JUMP_HEIGHT: f32 = 20.0;
 const RUN_COEFF: f32 = 3.0;
 pub const SPAWN_TRANSFORM: Transform = Transform::from_xyz(0.0, 200. + PLAYER_HEIGHT + 5., 0.0);
-
+const TORCH_INTENSITY: f32 = 10_000_000.;
+const FLICKER_SPEED: f64 = 2.;
 // struct for marking terrain that contains the player
 #[derive(Component)]
 pub struct ContainsPlayer(pub bool);
@@ -24,6 +27,9 @@ pub struct Player {
     shooting_timer: Timer
 }
 
+#[derive(Component)]
+struct Torch;
+
 pub fn setup_player(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -32,6 +38,15 @@ pub fn setup_player(
 ) {
     let transform = SPAWN_TRANSFORM;
     let mesh = Mesh::from(shape::Box::new(PLAYER_WIDTH, PLAYER_HEIGHT, PLAYER_WIDTH));
+    let light = commands.spawn(PointLightBundle {
+        point_light: PointLight {
+            color: Color::ORANGE,
+            intensity: TORCH_INTENSITY,
+            ..default()
+        },
+        transform: Transform::from_xyz(2., 5., 1.),
+        ..default()
+    }).insert(Torch).id();
     commands.spawn(PbrBundle {
         mesh: meshes.add(mesh.clone()),
         material: materials.add(Color::rgb_u8(124, 144, 255)),
@@ -42,6 +57,7 @@ pub fn setup_player(
     .insert(Collider::cuboid(PLAYER_WIDTH/2.0, PLAYER_HEIGHT/2.0, PLAYER_WIDTH/2.0))
     .insert(KinematicCharacterController::default())
     .insert(Player { shooting_timer: Timer::from_seconds(FIRE_RATE, TimerMode::Repeating) })
+    .add_child(light)
     .insert(Name::new("Player"));
 }
 
@@ -50,18 +66,15 @@ fn player_movement(
     keys: Res<ButtonInput<KeyCode>>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    mut set: ParamSet<(
-        Query<(&mut Player, &mut Transform, &mut KinematicCharacterController)>,
-        Query<(&Camera, &mut Transform)>
-    )>,
+    mut player: Query<(&mut Player, &mut Transform, &mut KinematicCharacterController)>,
     enemies: Query<&GlobalTransform, With<ent::enemy::Enemy>>,
     time: Res<Time>
 ) {
     let base_movement = GRAVITY_ACC*GRAVITY_DIR*time.delta_seconds();
     let mut movement = Vec3::ZERO;
-
-    for (mut player, plyr_trans, mut controller) in set.p0().iter_mut() {
-        
+    let mut rotation = 0.;
+    if let Ok(player) = player.get_single_mut() {
+        let (mut player, mut plyr_trans, mut controller) = player;
         // // shooting
         // player.shooting_timer.tick(time.delta());
         // if player.shooting_timer.just_finished() {
@@ -89,6 +102,17 @@ fn player_movement(
             movement = movement * RUN_COEFF;
         }
 
+        // rotation
+        if keys.pressed(KeyCode::KeyQ) {
+            rotation += ROTATION_SPEED*TAU*time.delta_seconds();
+        }
+        if keys.pressed(KeyCode::KeyE) {
+            rotation += -ROTATION_SPEED*TAU*time.delta_seconds();
+        }
+        if rotation != 0. {
+            plyr_trans.rotate_y(rotation);
+        }
+
         // Creative mode flying. Removes gravity effect
         if keys.pressed(KeyCode::ShiftLeft) {
             movement = movement + JUMP_HEIGHT*time.delta_seconds()*Vec3::Y - base_movement;
@@ -101,52 +125,16 @@ fn player_movement(
     }
 }
 
-fn read_result_system(
-    mut commands: Commands,
-    keys: Res<ButtonInput<KeyCode>>,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-    mut set: ParamSet<(
-        Query<(&mut Player, &mut Transform, &mut KinematicCharacterControllerOutput)>,
-        Query<&mut Transform, With<Camera>>
-    )>,
-    // enemies: Query<(&mut ent::enemy::Health, &mut ), With<ent::enemy::Enemy>>,
-    time: Res<Time>
+fn torch_system(
+    mut torch_query: Query<&mut PointLight, With<Torch>>,
+    perlin: Res<PerlinNoiseEntity>,
+    time: Res<Time>,
 ) {
-    let mut new_player_trans = Transform::default();
-    let mut effective_trans = Vec3::ZERO;
-    let mut rotation = 0.;
-
-    for (player, mut plyr_trans, ctrlr_output) in set.p0().iter_mut() {
-        // println!("Entity {:?} moved by {:?} and touches the ground: {:?}", player, ctrlr_output.effective_translation, ctrlr_output.grounded);
-        effective_trans = ctrlr_output.effective_translation;
+    if let Ok(mut torch) = torch_query.get_single_mut() {
+        let flicker = (1. + perlin.wind.get([time.elapsed_seconds_f64()*FLICKER_SPEED, time.elapsed_seconds_f64()*FLICKER_SPEED]))/2.;
+        torch.intensity = TORCH_INTENSITY * flicker as f32;
         
-        if keys.pressed(KeyCode::KeyQ) {
-            rotation += ROTATION_SPEED*TAU*time.delta_seconds();
-        }
-        if keys.pressed(KeyCode::KeyE) {
-            rotation += -ROTATION_SPEED*TAU*time.delta_seconds();
-        }
-        if rotation != 0. {
-            plyr_trans.rotate_y(rotation);
-        }
-
-        new_player_trans = plyr_trans.clone();
     }
-
-    for mut cam_trans in set.p1().iter_mut() {
-        // for third person
-        if effective_trans != Vec3::ZERO {
-            cam_trans.translation += effective_trans;
-        }
-    
-        cam_trans.rotate_around(new_player_trans.translation, Quat::from_rotation_y(rotation));
-        // for top view
-        let looking_dir = new_player_trans.forward().normalize() - Vec3::Y*0.2;
-        cam_trans.look_to(looking_dir, Vec3::Y);
-    }
-
-    
 }
 
 pub struct PlayerPlugin;
@@ -154,7 +142,9 @@ pub struct PlayerPlugin;
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, setup_player);
-        app.add_systems(Update, player_movement);
-        app.add_systems(Update, read_result_system);
+        app.add_systems(Update, (
+            player_movement,
+            torch_system
+        ));
     }
 }

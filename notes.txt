@@ -4,7 +4,8 @@
 * Choose skybox image
 * Performance Optimization (priority)
     - (COMPLETED) async task triggering (eg. for grass grid updates) https://docs.rs/bevy/latest/src/async_compute/async_compute.rs.html#53
-    - Thicker and less dense grass further from player?
+    - Wider* and less dense grass further from player? Less dense can be handled with different LODs but wider will cause jarring changes as the player moves thru field.
+        * at this point I really should just write a grass shader to handle dynamic grass width and wind, and leave grass in Render World
     - instancing grass -> https://bevyengine.org/examples/Shaders/shader-instancing/
         *** 3/23 Bevy v13 has RenderAssetUsages. Explore this for grass that exists solely in Render world.
 ## Notes

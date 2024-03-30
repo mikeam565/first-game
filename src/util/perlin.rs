@@ -3,6 +3,7 @@ use noise::{NoiseFn, Perlin};
 use crate::entities::terrain;
 pub const WIND_SEED: u32 = 0;
 pub const GRASS_HEIGHT_SEED: u32 = 1;
+pub const TORCH_SEED: u32 = 2;
 pub const TERRAIN_SEED: u32 = 040658;
 const HILL_HEIGHTS: f32 = 10.0;
 const TERRAIN_BUMPINESS: f32 = 2.0;
@@ -62,6 +63,11 @@ pub fn grass_perlin() -> Perlin {
 pub fn terrain_perlin() -> Perlin {
     Perlin::new(TERRAIN_SEED)
 }
+
+pub fn torch_perlin() -> Perlin {
+    Perlin::new(TORCH_SEED)
+}
+
 
 
 

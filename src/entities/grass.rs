@@ -16,10 +16,10 @@ use super::player::ContainsPlayer;
 // Grass constants
 const GRASS_TILE_SIZE_1: f32 = 32.;
 const GRASS_TILE_SIZE_2: f32 = 32.; // TODO: like terrain, this causes overlaps if bigger than SIZE_1
-const NUM_GRASS_1: u32 = 128; // number of grass blades in one row of a tile
+const NUM_GRASS_1: u32 = 96; // number of grass blades in one row of a tile
 const NUM_GRASS_2: u32 = 32;
 const GRASS_BLADE_VERTICES: u32 = 3;
-const GRASS_WIDTH: f32 = 0.2;
+const GRASS_WIDTH: f32 = 0.3;
 const GRASS_HEIGHT: f32 = 2.4;
 const GRASS_BASE_COLOR_1: [f32;4] = [0.102,0.153,0.,1.];
 const GRASS_BASE_COLOR_2: [f32;4] = [0.,0.019,0.,1.];
@@ -30,13 +30,15 @@ const GRASS_STRAIGHTNESS: f32 = 10.0; // for now, as opposed to a curve factor, 
 const GRASS_SPACING: f32 = 0.3;
 const GRASS_OFFSET: f32 = 0.2;
 const ENABLE_WIREFRAME: bool = false;
-const WIND_STRENGTH: f32 = 0.5;
+const WIND_STRENGTH: f32 = 1.;
 const WIND_SPEED: f64 = 0.5;
-const WIND_CONSISTENCY: f64 = 10.0; //
+const WIND_CONSISTENCY: f64 = 50.0; //
 const WIND_LEAN: f32 = 0.0; // determines how already bent grass will be at 0 wind
 const CURVE_POWER: f32 = 1.0; // the linearity / exponentiality of the application/bend of the wind
 const DESPAWN_DISTANCE: f32 = (GRID_SIZE_HALF+1) as f32 * GRASS_TILE_SIZE_1 + GRID_SIZE_HALF as f32;
-const WIND_SIM_DISTANCE: f32 = (GRID_SIZE_HALF/3) as f32 * GRASS_TILE_SIZE_1;
+const WIND_SIM_TRIGGER_DISTANCE: f32 = 3. * GRASS_TILE_SIZE_1;
+const WIND_SIM_DISTANCE: f32 = WIND_SIM_TRIGGER_DISTANCE - GRASS_TILE_SIZE_1/2.;
+
 const GRID_SIZE_HALF: i32 = 8;
 
 fn grass_material() -> StandardMaterial {
@@ -331,9 +333,9 @@ fn update_grass(
                 grass_w_player = Some(ent);
             }
             // simulate wind only if close enough and if visible
-            if (player_trans.translation.x - grass_trans.translation.x).abs() < WIND_SIM_DISTANCE && (player_trans.translation.z - grass_trans.translation.z).abs() < WIND_SIM_DISTANCE && visibility.get() {
+            if (player_trans.translation.x - grass_trans.translation.x).abs() < WIND_SIM_TRIGGER_DISTANCE && (player_trans.translation.z - grass_trans.translation.z).abs() < WIND_SIM_TRIGGER_DISTANCE && visibility.get() {
                 if let Some(mesh) = meshes.get_mut(mh) {
-                    apply_wind(mesh, grass_data, &perlin, elapsed_time);
+                    apply_wind(mesh, grass_data, &perlin, elapsed_time, player_trans.translation.xz());
                 }
             } else if (player_trans.translation.x - grass_trans.translation.x).abs() > DESPAWN_DISTANCE || (player_trans.translation.z - grass_trans.translation.z).abs() > DESPAWN_DISTANCE {
                 grass_grid.0.insert((grass_trans.translation.x as i32, grass_trans.translation.z as i32), false);
@@ -387,7 +389,7 @@ fn color_gradient_y_based(y: f32, rgba1: [f32; 4], rgba2: [f32; 4]) -> [f32;4] {
     [r, g, b, a]
 }
 
-fn apply_wind(mesh: &mut Mesh, grass: &GrassData, perlin: &PerlinNoiseEntity, time: f64) {
+fn apply_wind(mesh: &mut Mesh, grass: &GrassData, perlin: &PerlinNoiseEntity, time: f64, player_xz: Vec2) {
     let wind_perlin = perlin.wind;
     let pos_attr = mesh.attribute_mut(Mesh::ATTRIBUTE_POSITION).unwrap();
     let VertexAttributeValues::Float32x3(pos_attr) = pos_attr else {
@@ -403,7 +405,10 @@ fn apply_wind(mesh: &mut Mesh, grass: &GrassData, perlin: &PerlinNoiseEntity, ti
 
         let relative_vertex_height = pos[1] - y;
 
-        let curve_amount = WIND_STRENGTH * (sample_noise(&wind_perlin, *x, *z, time) * (relative_vertex_height.powf(CURVE_POWER)/GRASS_HEIGHT.powf(CURVE_POWER)));
+        let curve_amount = 
+            WIND_STRENGTH
+            * ((WIND_SIM_DISTANCE - player_xz.distance(Vec2::new(*x,*z))) / WIND_SIM_DISTANCE).powi(2)
+            * (sample_noise(&wind_perlin, *x, *z, time) * (relative_vertex_height.powf(CURVE_POWER)/GRASS_HEIGHT.powf(CURVE_POWER)));
         pos[0] = initial.x + curve_amount;
         pos[2] = initial.z + curve_amount;
     }

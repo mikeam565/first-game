@@ -3,9 +3,10 @@
 * Rounded normal for grass blades?
 * Choose skybox image
 * Performance Optimization (priority)
-    - async task triggering (eg. for grass grid updates) https://docs.rs/bevy/latest/src/async_compute/async_compute.rs.html#53
+    - (COMPLETED) async task triggering (eg. for grass grid updates) https://docs.rs/bevy/latest/src/async_compute/async_compute.rs.html#53
+    - Thicker and less dense grass further from player?
     - instancing grass -> https://bevyengine.org/examples/Shaders/shader-instancing/
-        *** 3/23 Bevy v13 has RenderAssetUsages. Explore this for grass that exists solely in Render world. Need to somehow have the wind logic there, too.
+        *** 3/23 Bevy v13 has RenderAssetUsages. Explore this for grass that exists solely in Render world.
 ## Notes
 * Queries
     - Queries cannot conflict -> Had the Camera controller query Transforms, as well as the Player controller, and it was not happy. Had to put camera logic in player logic.

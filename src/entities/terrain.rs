@@ -18,7 +18,7 @@ const TEXTURE_SCALE: f32 = 7.;
 const WATER_TEXTURE_SCALE: f32 = 20.;
 pub const BASE_LEVEL: f32 = 200.;
 pub const WATER_LEVEL: f32 = 189.;
-const WATER_SCROLL_SPEED: f32 = 0.001;
+const WATER_SCROLL_SPEED: f32 = 0.0002;
 const HEIGHT_PEAKS: f32 = 1500.;
 const HEIGHT_SAND: f32 = 200.;
 pub const HEIGHT_TEMPERATE_START: f32 = 210.;
@@ -31,16 +31,20 @@ const COLOR_PEAKS: [f32;4] = [255./255.,255./255.,255./255.,255./255.];
 #[derive(Component)]
 pub struct Terrain;
 
+#[derive(Component)]
+pub struct MainTerrain;
+
 /// set up a simple 3D scene
 pub fn update_terrain(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     asset_server: Res<AssetServer>,
-    mut terrain: Query<(Entity,&mut Transform, &Handle<Mesh>, &player::ContainsPlayer), With<Terrain>>,
+    mut main_terrain: Query<(Entity,&mut Transform, &Handle<Mesh>), (With<Terrain>, With<MainTerrain>)>,
+    mut distant_terrain: Query<(Entity,&mut Transform, &Handle<Mesh>), (With<Terrain>, Without<MainTerrain>)>,
     player: Query<&Transform, (With<player::Player>,Without<Terrain>)>,
 ) {
-    if terrain.is_empty() { // scene start
+    if main_terrain.is_empty() { // scene start
         // spawn chunk at player
         let player_trans = player.get_single().unwrap().translation;
         spawn_terrain_chunk(&mut commands, &mut meshes, &mut materials, &asset_server, 0., 0., true, PLANE_SIZE, SUBDIVISIONS_LEVEL_1);
@@ -52,22 +56,20 @@ pub fn update_terrain(
         }
         spawn_water_plane(&mut commands, &mut meshes, &mut materials, &asset_server);
     } else { // main update logic
-        for (entity, terrain_trans, mh, contains_player) in terrain.iter_mut() {
-            if contains_player.0 {
-                let player_trans = player.get_single().unwrap();
-                let mut delta: Option<Vec3> = None;
-        
-                // determine player triggering terrain refresh
-                if (player_trans.translation.x - terrain_trans.translation.x).abs() > PLANE_SIZE/4. || (player_trans.translation.z - terrain_trans.translation.z).abs() > PLANE_SIZE/4. {
-                    delta = Some(player_trans.translation - terrain_trans.translation);
-                }
-        
-                // if they have, regenerate the terrain
-                if let Some(delta) = delta {
-                    println!("Player has triggered terrain regeneration");
-                    regenerate_terrain(&mut commands, &mut meshes, &mut materials, &asset_server, &mut terrain, delta);
-                    break;
-                }
+        if let Ok(terrain) = main_terrain.get_single_mut() {
+            let (terrain_ent, terrain_trans, terrain_mesh) = terrain;
+            let player_trans = player.get_single().unwrap();
+            let mut delta: Option<Vec3> = None;
+    
+            // determine player triggering terrain refresh
+            if (player_trans.translation.x - terrain_trans.translation.x).abs() > PLANE_SIZE/4. || (player_trans.translation.z - terrain_trans.translation.z).abs() > PLANE_SIZE/4. {
+                delta = Some(player_trans.translation - terrain_trans.translation);
+            }
+    
+            // if they have, regenerate the terrain
+            if let Some(delta) = delta {
+                println!("Player has triggered terrain regeneration");
+                regenerate_terrain(&mut commands, &mut meshes, &mut materials, &asset_server, &mut main_terrain, &mut distant_terrain, delta);
             }
         }
     }
@@ -78,23 +80,28 @@ fn regenerate_terrain(
     meshes: &mut ResMut<Assets<Mesh>>,
     materials: &mut ResMut<Assets<StandardMaterial>>,
     asset_server: &Res<AssetServer>,
-    terrain: &mut Query<(Entity,&mut Transform, &Handle<Mesh>, &player::ContainsPlayer), With<Terrain>>,
+    main_terrain: &mut Query<(Entity,&mut Transform, &Handle<Mesh>), (With<Terrain>, With<MainTerrain>)>,
+    distant_terrain: &mut Query<(Entity,&mut Transform, &Handle<Mesh>), (With<Terrain>, Without<MainTerrain>)>,
     delta: Vec3
 ) {
     let collider_shape = ComputedColliderShape::TriMesh;
 
     // shift over and regen terrain
-    for (pl_ent, mut pl_trans, mh, contains_player) in terrain.iter_mut() {
-        pl_trans.translation = pl_trans.translation + delta;
-        pl_trans.translation.y = 0.;
+    for (ent, mut trans, mh) in main_terrain.iter_mut() {
+        trans.translation = trans.translation + delta;
+        trans.translation.y = 0.;
         let mesh = meshes.get_mut(mh).unwrap();
-        let mut subdivisions = SUBDIVISIONS_LEVEL_2;
-        if contains_player.0 {
-            subdivisions = SUBDIVISIONS_LEVEL_1
-        }
-        let new_mesh = &mut generate_terrain_mesh(pl_trans.translation.x, pl_trans.translation.z, PLANE_SIZE, subdivisions);
+        let new_mesh = &mut generate_terrain_mesh(trans.translation.x, trans.translation.z, PLANE_SIZE, SUBDIVISIONS_LEVEL_1);
         *mesh = new_mesh.clone();
-        commands.get_entity(pl_ent).unwrap().insert(Collider::from_bevy_mesh(&mesh, &collider_shape).unwrap());
+        commands.get_entity(ent).unwrap().insert(Collider::from_bevy_mesh(&mesh, &collider_shape).unwrap());
+    }
+    for (ent, mut trans, mh) in distant_terrain.iter_mut() {
+        trans.translation = trans.translation + delta;
+        trans.translation.y = 0.;
+        let mesh = meshes.get_mut(mh).unwrap();
+        let new_mesh = &mut generate_terrain_mesh(trans.translation.x, trans.translation.z, PLANE_SIZE, SUBDIVISIONS_LEVEL_2);
+        *mesh = new_mesh.clone();
+        // commands.get_entity(pl_ent).unwrap().insert(Collider::from_bevy_mesh(&mesh, &collider_shape).unwrap()); // no need for collider here atm
     }
 }
 
@@ -179,7 +186,9 @@ fn spawn_terrain_chunk(
         .insert(Terrain)
         .insert(Collider::from_bevy_mesh(&mesh, &collider_shape).unwrap()
     );
-    parent_terrain.insert(player::ContainsPlayer(contains_player));
+    if contains_player {
+        parent_terrain.insert(MainTerrain);
+    }
     parent_terrain.id()
     
 }
@@ -238,15 +247,6 @@ fn spawn_water_plane(
         transform: Transform::from_xyz(0.0,WATER_LEVEL,0.0),
         ..default()
     }).insert(Water);
-    // commands.spawn( PbrBundle {
-    //     mesh: meshes.add(water_mesh_darkness),
-    //     material: materials.add(StandardMaterial {
-    //         base_color: Color::rgb(0., 54./256., 78./256.),
-    //         ..default()
-    //     }),
-    //     transform: Transform::from_xyz(0.0, WATER_LEVEL - 50., 0.0),
-    //     ..default()
-    // });
 }
 
 fn generate_terrain_mesh(x: f32, z: f32, size: f32, subdivisions: u32) -> Mesh {

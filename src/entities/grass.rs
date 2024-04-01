@@ -352,8 +352,8 @@ fn update_grass(
     }
 }
 
-fn handle_tasks(mut commands: Commands, mut transform_tasks: Query<&mut GenGrassTask>) {
-    for mut task in &mut transform_tasks {
+fn handle_tasks(mut commands: Commands, mut grass_tasks: Query<&mut GenGrassTask>) {
+    for mut task in &mut grass_tasks {
         if let Some(mut commands_queue) = block_on(poll_once(&mut task.0)) {
             // append the returned command queue to have it execute later
             commands.append(&mut commands_queue);

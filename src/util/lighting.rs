@@ -118,6 +118,6 @@ impl Plugin for LightingPlugin {
                 size: 4096
             });
         app.add_systems(Startup, setup_lighting);
-        // app.add_systems(Update, daylight_cycle);
+        app.add_systems(Update, daylight_cycle);
     }
 }

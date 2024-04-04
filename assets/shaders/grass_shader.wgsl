@@ -1,6 +1,6 @@
 #import bevy_pbr::{
     mesh_view_bindings::globals,
-    mesh_functions::{get_model_matrix, mesh_position_local_to_clip},
+    mesh_functions::{get_model_matrix, mesh_position_local_to_clip, mesh_normal_local_to_world},
     forward_io::VertexOutput,
 }
 
@@ -33,6 +33,8 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     var new_y = vertex.position.y;
     var new_z = vertex.starting_position.z + noise * ((vertex.position.y-vertex.base_y) / 2.4);
     out.position = mesh_position_local_to_clip(get_model_matrix(vertex.instance_index), vec4<f32>(vec3<f32>(new_x, new_y, new_z), 1.0));
+    out.world_normal = mesh_normal_local_to_world(vertex.normal, vertex.instance_index);
+    
     out.color = vertex.color;
     return out;
 }

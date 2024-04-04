@@ -991,6 +991,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "bevy_shader_utils"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d2ac2f8adeb27b4e114fcb451fd1a72615cdd760303137c20701b7362ef79474"
+dependencies = [
+ "bevy",
+]
+
+[[package]]
 name = "bevy_sprite"
 version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1953,6 +1962,7 @@ dependencies = [
  "bevy-inspector-egui",
  "bevy_atmosphere",
  "bevy_rapier3d",
+ "bevy_shader_utils",
  "bytemuck",
  "futures-lite 1.13.0",
  "noise",

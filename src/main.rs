@@ -5,6 +5,7 @@ use bevy::{diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin}, input
 use bevy_atmosphere::prelude::*;
 use bevy_rapier3d::prelude::*;
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
+use bevy_shader_utils::ShaderUtilsPlugin;
 use crate::entities as ent;
 
 fn main() {
@@ -13,6 +14,7 @@ fn main() {
     App::new()
         .add_plugins((
             DefaultPlugins,
+            ShaderUtilsPlugin,
             WorldInspectorPlugin::new(),
             LogDiagnosticsPlugin::default(),
             FrameTimeDiagnosticsPlugin::default(),

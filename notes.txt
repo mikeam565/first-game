@@ -18,3 +18,9 @@
         * Spawning these entities constantly whenever moving is (expectedly) terrible for performance. A better approach would be to spawn only as points for a path
         * timer similar to projectile timer can be used to slowly un-deform the grass back to normal condition
 * Use Bevy's ecs Added filter for one-time modifications
+
+
+
+CUSTOM GRASS SHADER NOTES:
+* Before shader: Could handle 64x64=4096 grass blades per tile at 8x8=64 tiles = 262,144 blades of grass and only simulating wind on some of them
+* After shader: Can handle 128x128=16384 grass blades per tile at 64 tiles = 1,048,576 million grass blades simulating wind!

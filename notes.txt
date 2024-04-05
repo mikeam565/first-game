@@ -18,7 +18,7 @@
         * Spawning these entities constantly whenever moving is (expectedly) terrible for performance. A better approach would be to spawn only as points for a path
         * timer similar to projectile timer can be used to slowly un-deform the grass back to normal condition
 * Use Bevy's ecs Added filter for one-time modifications
-
+# Plugins: bevy doesn't like too many individual plugins added at a time. Group them instead.
 
 
 CUSTOM GRASS SHADER NOTES:

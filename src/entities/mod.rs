@@ -4,3 +4,4 @@ pub mod grass;
 pub mod projectiles;
 pub mod terrain;
 pub mod util;
+pub mod poi;

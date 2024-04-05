@@ -13,15 +13,19 @@ fn main() {
 
     App::new()
         .add_plugins((
-            DefaultPlugins,
-            ShaderUtilsPlugin,
-            WorldInspectorPlugin::new(),
-            LogDiagnosticsPlugin::default(),
-            FrameTimeDiagnosticsPlugin::default(),
+            (
+                DefaultPlugins,
+                ShaderUtilsPlugin,
+                WorldInspectorPlugin::new(),
+                LogDiagnosticsPlugin::default(),
+                FrameTimeDiagnosticsPlugin::default(),
+            ),
+            ent::poi::PoiPlugin,
             AtmospherePlugin,
             RapierPhysicsPlugin::<NoUserData>::default(),
             // RapierDebugRenderPlugin::default(),
             util::camera::CameraPlugin,
+            util::audio::AudioPlugin,
             util::lighting::LightingPlugin,
             util::perlin::PerlinPlugin,
             ent::terrain::TerrainPlugin,

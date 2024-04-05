@@ -5,6 +5,7 @@ use bevy::prelude::*;
 use crate::entities::{player::Player, poi::ActivePointOfInterest};
 
 const NUM_STEMS: f32 = 7.;
+const AUDIO_DIST: f32 = 600.;
 
 #[derive(Component)]
 struct AudioStem {
@@ -63,14 +64,12 @@ fn update_audio(
         if let Ok(player_trans) = player.get_single() {
             let to_active_poi = (player_trans.translation - active_trans.translation).normalize();
             let angle_btwn = player_trans.forward().angle_between(to_active_poi);
+            let dist_btwn = player_trans.translation.distance(active_trans.translation);
             for (sink, audio_stem) in stems.iter() {
-                let frac = audio_stem.threshold / NUM_STEMS;
-                if angle_btwn > frac * PI && angle_btwn < frac * PI + PI/NUM_STEMS {
-                    sink.set_volume(
-                        (angle_btwn-frac*PI)
-                        /
-                        (PI/NUM_STEMS)
-                    );
+                if dist_btwn < AUDIO_DIST/NUM_STEMS * (audio_stem.threshold+1.) {
+                    sink.set_volume(angle_btwn/PI);
+                } else {
+                    sink.set_volume(0.);
                 }
             }
         }

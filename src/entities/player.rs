@@ -38,15 +38,15 @@ pub fn setup_player(
 ) {
     let transform = SPAWN_TRANSFORM;
     let mesh = Mesh::from(shape::Box::new(PLAYER_WIDTH, PLAYER_HEIGHT, PLAYER_WIDTH));
-    // let light = commands.spawn(PointLightBundle {
-    //     point_light: PointLight {
-    //         color: Color::ORANGE,
-    //         intensity: TORCH_INTENSITY,
-    //         ..default()
-    //     },
-    //     transform: Transform::from_xyz(2., 5., 1.),
-    //     ..default()
-    // }).insert(Torch).id();
+    let light = commands.spawn(PointLightBundle {
+        point_light: PointLight {
+            color: Color::ORANGE,
+            intensity: TORCH_INTENSITY,
+            ..default()
+        },
+        transform: Transform::from_xyz(2., 5., 1.),
+        ..default()
+    }).insert(Torch).id();
     commands.spawn(PbrBundle {
         mesh: meshes.add(mesh.clone()),
         material: materials.add(Color::rgb_u8(124, 144, 255)),
@@ -57,7 +57,7 @@ pub fn setup_player(
     .insert(Collider::cuboid(PLAYER_WIDTH/2.0, PLAYER_HEIGHT/2.0, PLAYER_WIDTH/2.0))
     .insert(KinematicCharacterController::default())
     .insert(Player { shooting_timer: Timer::from_seconds(FIRE_RATE, TimerMode::Repeating) })
-    // .add_child(light)
+    .add_child(light)
     .insert(Name::new("Player"));
 }
 

@@ -1,4 +1,4 @@
-use bevy::{core_pipeline::{bloom::BloomSettings, prepass::DeferredPrepass, tonemapping::Tonemapping, Skybox}, prelude::*, render::{render_resource::{TextureViewDescriptor, TextureViewDimension}, view::ColorGrading}};
+use bevy::{core_pipeline::{bloom::BloomSettings, prepass::{DeferredPrepass, DepthPrepass}, tonemapping::Tonemapping, Skybox}, prelude::*, render::{render_resource::{TextureViewDescriptor, TextureViewDimension}, view::ColorGrading}};
 use bevy_atmosphere::{prelude::*, skybox};
 use bevy_rapier3d::prelude::*;
 use bevy::asset::LoadState;
@@ -44,7 +44,6 @@ pub fn setup_camera(
                 // composite_mode: BloomCompositeMode::Additive,
                 ..default()
             },
-            DeferredPrepass
         )).id();
         commands.get_entity(player_entity).unwrap().add_child(cam);
     }

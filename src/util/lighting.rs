@@ -81,14 +81,14 @@ fn daylight_cycle(
         if let Some((mut light_trans, mut directional)) = sun.single_mut().into() {
             light_trans.rotation = Quat::from_rotation_x(-t);
             directional.illuminance = t.sin().max(0.0).powf(2.0) * AMBIENT_DAYLIGHT;
-            directional.shadows_enabled = directional.illuminance >= 0.0;
+            directional.shadows_enabled = directional.illuminance > 0.0;
             ambient.brightness = t.sin().max(0.0).powf(2.0) * 1000.;
         }
 
         if let Some((mut light_trans, mut directional)) = moon.single_mut().into() {
             light_trans.rotation = Quat::from_rotation_x(-t+PI);
             directional.illuminance = (-(t.sin())).max(0.0).powf(2.0) * 250.;
-            directional.shadows_enabled = directional.illuminance >= 0.0;
+            directional.shadows_enabled = directional.illuminance > 0.0;
 
         }
     }

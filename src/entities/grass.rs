@@ -289,7 +289,7 @@ fn update_grass(
                     .insert(main_grass)
                     .insert(main_data)
                     .insert(ContainsPlayer(contains_player))
-                    .insert(NotShadowReceiver)
+                    // .insert(NotShadowReceiver)
                     // .insert(ShowAabbGizmo {color: Some(color)})
                     ;
             }
@@ -345,6 +345,7 @@ fn update_grass(
                                         .insert(Grass)
                                         .insert(grass_data)
                                         .insert(ContainsPlayer(false))
+                                        // .insert(NotShadowReceiver)
                                         // .insert(ShowAabbGizmo {color: Some(Color::PURPLE)})
                                         .remove::<GenGrassTask>();
                                     });

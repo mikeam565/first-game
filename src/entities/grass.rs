@@ -3,7 +3,7 @@ use std::borrow::BorrowMut;
 use crate::entities::{terrain, player};
 use crate::{entities, util::perlin::sample_terrain_height};
 use bevy::ecs::system::{CommandQueue, SystemState};
-use bevy::pbr::{ExtendedMaterial, MaterialExtension, MaterialExtensionKey, MaterialExtensionPipeline, MaterialPipeline};
+use bevy::pbr::{ExtendedMaterial, MaterialExtension, MaterialExtensionKey, MaterialExtensionPipeline, MaterialPipeline, NotShadowReceiver};
 use bevy::render::color;
 use bevy::render::mesh::{MeshVertexAttribute, MeshVertexBufferLayout};
 use bevy::render::primitives::Aabb;
@@ -24,7 +24,7 @@ const GRASS_TILE_SIZE_2: f32 = 32.; // TODO: like terrain, this causes overlaps 
 const NUM_GRASS_1: u32 = 128; // number of grass blades in one row of a tile
 const NUM_GRASS_2: u32 = 32;
 const GRASS_BLADE_VERTICES: u32 = 3;
-const GRASS_WIDTH: f32 = 0.1;
+const GRASS_WIDTH: f32 = 0.3;
 const GRASS_HEIGHT: f32 = 2.4;
 const GRASS_BASE_COLOR_1: [f32;4] = [0.102,0.153,0.,1.];
 const GRASS_BASE_COLOR_2: [f32;4] = [0.,0.019,0.,1.];
@@ -169,7 +169,7 @@ pub fn generate_grass(
     (
         bundle,
         Grass {},
-        grass_data
+        grass_data,
     )
 
 }
@@ -181,13 +181,13 @@ pub fn generate_single_blade_verts(x: f32, y: f32, z: f32, blade_number: u32, bl
     let t2 = Transform::from_xyz(x+GRASS_WIDTH, y, z);
     // let t3 = Transform::from_xyz(x, y+blade_height/3.0, z);
     // let t4 = Transform::from_xyz(x+GRASS_WIDTH, y+blade_height/3.0, z);
-    let t5 = Transform::from_xyz(x, y+2.0*blade_height/3.0, z);
-    let t6 = Transform::from_xyz(x + GRASS_WIDTH, y+2.0*blade_height/3.0, z);
+    // let t5 = Transform::from_xyz(x, y+2.0*blade_height/3.0, z);
+    // let t6 = Transform::from_xyz(x + GRASS_WIDTH, y+2.0*blade_height/3.0, z);
     let t7 = Transform::from_xyz(x+(GRASS_WIDTH/2.0), y+blade_height, z);
     
     // let mut transforms = vec![t1,t2,t3,t4,t5,t6,t7];
-    let mut transforms = vec![t1,t2,t5,t6,t7];
-    // let mut transforms = vec![t1,t2,t7];
+    // let mut transforms = vec![t1,t2,t5,t6,t7];
+    let mut transforms = vec![t1,t2,t7];
     let blade_number_shift = blade_number*transforms.len() as u32;
     
     // // physical randomization of grass blades
@@ -204,8 +204,8 @@ pub fn generate_single_blade_verts(x: f32, y: f32, z: f32, blade_number: u32, bl
 
     let indices: Vec<u32> = vec![
         blade_number_shift+0, blade_number_shift+1, blade_number_shift+2,
-        blade_number_shift+2, blade_number_shift+1, blade_number_shift+3,
-        blade_number_shift+2, blade_number_shift+3, blade_number_shift+4,
+        // blade_number_shift+2, blade_number_shift+1, blade_number_shift+3,
+        // blade_number_shift+2, blade_number_shift+3, blade_number_shift+4,
         // blade_number_shift+4, blade_number_shift+3, blade_number_shift+5,
         // blade_number_shift+4, blade_number_shift+5, blade_number_shift+6,
     ];
@@ -289,6 +289,7 @@ fn update_grass(
                     .insert(main_grass)
                     .insert(main_data)
                     .insert(ContainsPlayer(contains_player))
+                    .insert(NotShadowReceiver)
                     // .insert(ShowAabbGizmo {color: Some(color)})
                     ;
             }

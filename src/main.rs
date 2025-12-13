@@ -9,8 +9,6 @@ use bevy_shader_utils::ShaderUtilsPlugin;
 use crate::entities as ent;
 
 fn main() {
-    std::env::set_var("RUST_BACKTRACE", "1");
-
     App::new()
         .add_plugins((
             (

@@ -4,10 +4,7 @@
 * Dynamic Audio
     - Design dynamic POI-based audio system (current demo is just a hacky demo)
     - More stems play closer to POI, while volume is based off of angle?
-* Performance Optimization (priority)
-    - (COMPLETED) async task triggering (eg. for grass grid updates) https://docs.rs/bevy/latest/src/async_compute/async_compute.rs.html#53
-    - Wider* and less dense grass further from player? Less dense can be handled with different LODs but wider will cause jarring changes as the player moves thru field.
-        * at this point I really should just write a grass shader to handle dynamic grass width and wind, and leave grass in Render World
+* Performance Optimization 
     - instancing grass -> https://bevyengine.org/examples/Shaders/shader-instancing/
         *** 3/23 Bevy v13 has RenderAssetUsages. Explore this for grass that exists solely in Render world.
 ## Notes
@@ -24,5 +21,7 @@
 
 
 CUSTOM GRASS SHADER NOTES:
-* Before shader: Could handle 64x64=4096 grass blades per tile at 8x8=64 tiles = 262,144 blades of grass and only simulating wind on some of them
-* After shader: Can handle 128x128=16384 grass blades per tile at 64 tiles = 1,048,576 million grass blades simulating wind!
+* 3060 ti | Windows 10 | Before shader: Could handle 64x64=4096 grass blades per tile at 8x8=64 tiles = 262,144 blades of grass and only simulating wind on some of them
+* 3060 ti | Windows 10 | After shader: Can handle 128x128=16384 grass blades per tile at 64 tiles = 1,048,576 million grass blades simulating wind! (^ these two were ~60fps targets)
+* 9070XT | Linux Mint | Before frustum culling: 128x128=16384 grass blades per tile at 16x16=256 tile grass grid = 4,194,304 million grass blades at ~60 fps
+* 9070XT | Linux Mint | After frustum culling ~120 fps, or increasing the size of the grass grid to see grass twice as far

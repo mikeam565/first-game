@@ -1,11 +1,10 @@
-use std::f32::consts::{PI, TAU};
+use std::f32::consts::TAU;
 
 use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
 use bevy_rapier3d::control::KinematicCharacterController;
 use noise::NoiseFn;
-use rand::{thread_rng, Rng};
-use crate::{entities as ent, util::{camera::setup_camera, gravity::{GRAVITY_ACC, GRAVITY_DIR}, perlin::{self, PerlinNoiseEntity}}};
+use crate::util::{gravity::{GRAVITY_ACC, GRAVITY_DIR}, perlin::PerlinNoiseEntity};
 
 const SPEED: f32 = 20.0;
 const ROTATION_SPEED: f32 = 0.3;
@@ -34,10 +33,10 @@ pub fn setup_player(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    asset_server: Res<AssetServer>,
+    _asset_server: Res<AssetServer>,
 ) {
     let transform = SPAWN_TRANSFORM;
-    let mesh = Mesh::from(shape::Box::new(PLAYER_WIDTH, PLAYER_HEIGHT, PLAYER_WIDTH));
+    let mesh = Mesh::from(Cuboid::new(PLAYER_WIDTH, PLAYER_HEIGHT, PLAYER_WIDTH));
     let light = commands.spawn(PointLightBundle {
         point_light: PointLight {
             color: Color::ORANGE,
@@ -52,7 +51,7 @@ pub fn setup_player(
         material: materials.add(Color::rgb_u8(124, 144, 255)),
         ..default()
     })
-    .insert(transform.clone())
+    .insert(transform)
     .insert(RigidBody::KinematicPositionBased)
     .insert(Collider::cuboid(PLAYER_WIDTH/2.0, PLAYER_HEIGHT/2.0, PLAYER_WIDTH/2.0))
     .insert(KinematicCharacterController::default())
@@ -62,19 +61,19 @@ pub fn setup_player(
 }
 
 fn player_movement(
-    mut commands: Commands,
+    _commands: Commands,
     keys: Res<ButtonInput<KeyCode>>,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    _meshes: ResMut<Assets<Mesh>>,
+    _materials: ResMut<Assets<StandardMaterial>>,
     mut player: Query<(&mut Player, &mut Transform, &mut KinematicCharacterController)>,
-    enemies: Query<&GlobalTransform, With<ent::enemy::Enemy>>,
+    // _enemies: Query<&GlobalTransform, With<ent::enemy::Enemy>>,
     time: Res<Time>
 ) {
     let base_movement = GRAVITY_ACC*GRAVITY_DIR*time.delta_seconds();
     let mut movement = Vec3::ZERO;
     let mut rotation = 0.;
     if let Ok(player) = player.get_single_mut() {
-        let (mut player, mut plyr_trans, mut controller) = player;
+        let (_player, mut plyr_trans, mut controller) = player;
         // // shooting
         // player.shooting_timer.tick(time.delta());
         // if player.shooting_timer.just_finished() {
@@ -86,20 +85,20 @@ fn player_movement(
 
         // movement
         if keys.pressed(KeyCode::KeyW) {
-            movement = movement + plyr_trans.rotation * -Vec3::Z * SPEED * time.delta_seconds();
+            movement += plyr_trans.rotation * -Vec3::Z * SPEED * time.delta_seconds();
         }
         if keys.pressed(KeyCode::KeyS) {
-            movement = movement + plyr_trans.rotation * Vec3::Z * SPEED * time.delta_seconds();
+            movement += plyr_trans.rotation * Vec3::Z * SPEED * time.delta_seconds();
         }
         if keys.pressed(KeyCode::KeyA) {
-            movement = movement + plyr_trans.rotation * -Vec3::X * SPEED * time.delta_seconds();
+            movement += plyr_trans.rotation * -Vec3::X * SPEED * time.delta_seconds();
         }
         if keys.pressed(KeyCode::KeyD) {
-            movement = movement + plyr_trans.rotation * Vec3::X * SPEED * time.delta_seconds();
+            movement += plyr_trans.rotation * Vec3::X * SPEED * time.delta_seconds();
         }
 
         if keys.pressed(KeyCode::ShiftLeft) {
-            movement = movement * RUN_COEFF;
+            movement *= RUN_COEFF;
         }
 
         // rotation

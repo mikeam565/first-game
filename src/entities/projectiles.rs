@@ -3,10 +3,8 @@ use std::f32::consts::PI;
 use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
 use bevy::utils::FloatOrd;
-use bevy_rapier3d::rapier::geometry::ColliderBuilder;
 use crate::entities as ent;
 use crate::entities::enemy;
-use crate::util;
 
 // constants
 const BASIC_PROJECTILE_SPEED: f32 = 50.0;
@@ -45,7 +43,7 @@ pub fn basic_projectile(
     let mesh: Mesh = shape::Capsule {
         radius: PROJECTILE_RADIUS,
         ..default()
-    }.try_into().unwrap();
+    }.into();
 
     let mut aimed_transform = transform.looking_at(target, Vec3::Y);
     aimed_transform.rotate_local_x(-PI/2.);
@@ -101,7 +99,7 @@ fn projectile_system(
             CollisionEvent::Stopped(_,_,_) => {
                 // println!("Collision event between {:?} and {:?} with flags {:?}", e1, e2, flags);
             },
-            CollisionEvent::Started(e1, e2, flags) => {
+            CollisionEvent::Started(e1, e2, _flags) => {
                 // println!("Collision event between {:?} and {:?} with flags {:?}", e1, e2, flags);
                 for entity in &entities {
                     if e1.index() == entity.index() {
@@ -115,7 +113,7 @@ fn projectile_system(
     }
 }
 
-fn aim(projectile: Vec3, dest: Vec3) -> Vec3 {
+fn aim(_projectile: Vec3, dest: Vec3) -> Vec3 {
     // println!("Closest enemy identified at {}", dest);
     let compensation = enemy::ENEMY_HEIGHT;
     dest + Vec3::Y*compensation

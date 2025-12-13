@@ -1,7 +1,9 @@
+#![allow(clippy::eq_op, clippy::type_complexity)]
+
 mod entities;
 mod util;
 
-use bevy::{diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin}, input::InputPlugin, pbr::DirectionalLightShadowMap, prelude::*};
+use bevy::{diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin}, prelude::*};
 use bevy_atmosphere::prelude::*;
 use bevy_rapier3d::prelude::*;
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
@@ -16,23 +18,23 @@ fn main() {
                 ShaderUtilsPlugin,
                 WorldInspectorPlugin::new(),
                 LogDiagnosticsPlugin::default(),
-                FrameTimeDiagnosticsPlugin::default(),
+                FrameTimeDiagnosticsPlugin,
             ),
-            ent::poi::PoiPlugin,
+            // ent::poi::PoiPlugin,
             AtmospherePlugin,
             RapierPhysicsPlugin::<NoUserData>::default(),
             // RapierDebugRenderPlugin::default(),
             util::camera::CameraPlugin,
-            util::audio::AudioPlugin,
+            // util::audio::AudioPlugin,
             util::lighting::LightingPlugin,
             util::perlin::PerlinPlugin,
             ent::terrain::TerrainPlugin,
             ent::grass::GrassPlugin,
             ent::player::PlayerPlugin,
-            ent::enemy::EnemyPlugin,
-            ent::projectiles::ProjectilePlugin,
+            // ent::enemy::EnemyPlugin,
+            // ent::projectiles::ProjectilePlugin,
         ))
         .register_type::<ent::player::Player>()
-        .register_type::<ent::projectiles::BasicProjectile>()
+        // .register_type::<ent::projectiles::BasicProjectile>()
         .run();
 }

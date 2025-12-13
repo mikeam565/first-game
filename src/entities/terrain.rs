@@ -1,18 +1,13 @@
 use bevy::render::texture::{ImageAddressMode, ImageLoaderSettings, ImageSampler, ImageSamplerDescriptor};
 use bevy::{prelude::*, render::render_resource::Face};
-use bevy::render::render_resource::PrimitiveTopology;
-use bevy::render::mesh::{self, VertexAttributeValues};
-use noise::NoiseFn;
-use rand::Rng;
-use crate::entities::{grass,util,player};
+use bevy::render::mesh::VertexAttributeValues;
+use crate::entities::player;
 use crate::util::perlin::{self, sample_terrain_height};
 use bevy_rapier3d::prelude::*;
 
 pub const PLANE_SIZE: f32 = 6000.;
-pub const SIZE_NO_PLAYER: f32 = 6000.; // TODO: This actually causes overlaps if it is bigger than PLANE_SIZE
 const SUBDIVISIONS_LEVEL_1: u32 = 1024;
 const SUBDIVISIONS_LEVEL_2: u32 = 256;
-const SUBDIVISIONS_LEVEL_3: u32 = 2;
 const TILE_WIDTH: u32 = 4; // how wide a tile should be
 const TEXTURE_SCALE: f32 = 7.;
 const WATER_TEXTURE_SCALE: f32 = 20.;
@@ -47,17 +42,17 @@ pub fn update_terrain(
     if main_terrain.is_empty() { // scene start
         // spawn chunk at player
         let player_trans = player.get_single().unwrap().translation;
-        spawn_terrain_chunk(&mut commands, &mut meshes, &mut materials, &asset_server, 0., 0., true, PLANE_SIZE, SUBDIVISIONS_LEVEL_1);
+        spawn_terrain_chunk(&mut commands, &mut meshes, &mut materials, 0., 0., true, PLANE_SIZE, SUBDIVISIONS_LEVEL_1);
         // spawn chunks without player in them
         for (dx,dz) in [(1,0),(-1,0),(0,1),(0,-1),(1,1),(1,-1),(-1,1),(-1,-1)] {
-            let calc_dx = dx as f32 * (PLANE_SIZE/2. + SIZE_NO_PLAYER/2.);
-            let calc_dz = dz as f32 * (PLANE_SIZE/2. + SIZE_NO_PLAYER/2.);
-            spawn_terrain_chunk(&mut commands, &mut meshes, &mut materials, &asset_server, player_trans.x + calc_dx, player_trans.z + calc_dz, false, SIZE_NO_PLAYER, SUBDIVISIONS_LEVEL_2);
+            let calc_dx = dx as f32 * PLANE_SIZE;
+            let calc_dz = dz as f32 * PLANE_SIZE;
+            spawn_terrain_chunk(&mut commands, &mut meshes, &mut materials, player_trans.x + calc_dx, player_trans.z + calc_dz, false, PLANE_SIZE, SUBDIVISIONS_LEVEL_2);
         }
         spawn_water_plane(&mut commands, &mut meshes, &mut materials, &asset_server);
     } else { // main update logic
         if let Ok(terrain) = main_terrain.get_single_mut() {
-            let (terrain_ent, terrain_trans, terrain_mesh) = terrain;
+            let (_terrain_ent, terrain_trans, _terrain_mesh) = terrain;
             let player_trans = player.get_single().unwrap();
             let mut delta: Option<Vec3> = None;
     
@@ -69,7 +64,7 @@ pub fn update_terrain(
             // if they have, regenerate the terrain
             if let Some(delta) = delta {
                 println!("Player has triggered terrain regeneration");
-                regenerate_terrain(&mut commands, &mut meshes, &mut materials, &asset_server, &mut main_terrain, &mut distant_terrain, delta);
+                regenerate_terrain(&mut commands, &mut meshes, &mut main_terrain, &mut distant_terrain, delta);
             }
         }
     }
@@ -78,8 +73,6 @@ pub fn update_terrain(
 fn regenerate_terrain(
     commands: &mut Commands,
     meshes: &mut ResMut<Assets<Mesh>>,
-    materials: &mut ResMut<Assets<StandardMaterial>>,
-    asset_server: &Res<AssetServer>,
     main_terrain: &mut Query<(Entity,&mut Transform, &Handle<Mesh>), (With<Terrain>, With<MainTerrain>)>,
     distant_terrain: &mut Query<(Entity,&mut Transform, &Handle<Mesh>), (With<Terrain>, Without<MainTerrain>)>,
     delta: Vec3
@@ -88,20 +81,19 @@ fn regenerate_terrain(
 
     // shift over and regen terrain
     for (ent, mut trans, mh) in main_terrain.iter_mut() {
-        trans.translation = trans.translation + delta;
+        trans.translation += delta;
         trans.translation.y = 0.;
         let mesh = meshes.get_mut(mh).unwrap();
         let new_mesh = &mut generate_terrain_mesh(trans.translation.x, trans.translation.z, PLANE_SIZE, SUBDIVISIONS_LEVEL_1);
         *mesh = new_mesh.clone();
-        commands.get_entity(ent).unwrap().insert(Collider::from_bevy_mesh(&mesh, &collider_shape).unwrap());
+        commands.get_entity(ent).unwrap().insert(Collider::from_bevy_mesh(mesh, &collider_shape).unwrap());
     }
-    for (ent, mut trans, mh) in distant_terrain.iter_mut() {
-        trans.translation = trans.translation + delta;
+    for (_ent, mut trans, mh) in distant_terrain.iter_mut() {
+        trans.translation += delta;
         trans.translation.y = 0.;
         let mesh = meshes.get_mut(mh).unwrap();
         let new_mesh = &mut generate_terrain_mesh(trans.translation.x, trans.translation.z, PLANE_SIZE, SUBDIVISIONS_LEVEL_2);
         *mesh = new_mesh.clone();
-        // commands.get_entity(pl_ent).unwrap().insert(Collider::from_bevy_mesh(&mesh, &collider_shape).unwrap()); // no need for collider here atm
     }
 }
 
@@ -137,11 +129,11 @@ fn terrain_color_gradient(ratio: f32, rgba1: [f32; 4], rgba2: [f32; 4]) -> [f32;
     ]
 }
 
+#[allow(clippy::too_many_arguments)]
 fn spawn_terrain_chunk(
     commands: &mut Commands,
     meshes: &mut ResMut<Assets<Mesh>>,
     materials: &mut ResMut<Assets<StandardMaterial>>,
-    asset_server: &Res<AssetServer>,
     x: f32, z: f32,
     contains_player: bool,
     size: f32,
@@ -149,21 +141,7 @@ fn spawn_terrain_chunk(
 ) -> Entity {    
     let mesh = generate_terrain_mesh(x, z, size, subdivisions);
     
-    let sampler_desc = ImageSamplerDescriptor {
-        address_mode_u: ImageAddressMode::Repeat,
-        address_mode_v: ImageAddressMode::Repeat,
-        ..default()
-    };
-    let settings = move |s: &mut ImageLoaderSettings| {
-        s.sampler = ImageSampler::Descriptor(sampler_desc.clone());
-    };
-
-    // let texture_handle = asset_server.load_with_settings("terrain/rocky_soil.png", settings.clone());
-    // let normal_handle = asset_server.load_with_settings("terrain/rocky_soil_normal.png", settings);
     let terrain_material = StandardMaterial {
-        // base_color: if contains_player { Color::WHITE } else { Color::WHITE }, // use to see difference in terrain chunks
-        // base_color_texture: Some(texture_handle.clone()),
-        // normal_map_texture: Some(normal_handle.clone()),
         alpha_mode: AlphaMode::Opaque,
         double_sided: true,
         perceptual_roughness: 1.0,
@@ -196,6 +174,7 @@ fn spawn_terrain_chunk(
 #[derive(Component)]
 struct Water;
 
+#[allow(deprecated)] // Plane3d doesn't have built in subdivisions, non-trivial replacement
 fn spawn_water_plane(
     commands: &mut Commands,
     meshes: &mut ResMut<Assets<Mesh>>,
@@ -207,14 +186,14 @@ fn spawn_water_plane(
         subdivisions: 1,
     }.into();
 
-    let water_mesh_darkness = water_mesh.clone();
+    let _water_mesh_darkness = water_mesh.clone();
 
     let pos_attr = water_mesh.attribute(Mesh::ATTRIBUTE_POSITION).unwrap();
     let VertexAttributeValues::Float32x3(pos_attr) = pos_attr else {
         panic!("Unexpected vertex format, expected Float32x3");
     };
 
-    let water_uvs: Vec<[f32; 2]> = pos_attr.iter().map(|[x,y,z]| { [x / WATER_TEXTURE_SCALE, z / WATER_TEXTURE_SCALE]}).collect();
+    let water_uvs: Vec<[f32; 2]> = pos_attr.iter().map(|[x,_y,z]| { [x / WATER_TEXTURE_SCALE, z / WATER_TEXTURE_SCALE]}).collect();
 
     water_mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, water_uvs);
 
@@ -249,6 +228,7 @@ fn spawn_water_plane(
     }).insert(Water);
 }
 
+#[allow(deprecated)]
 fn generate_terrain_mesh(x: f32, z: f32, size: f32, subdivisions: u32) -> Mesh {
     let num_vertices: usize = (SUBDIVISIONS_LEVEL_1 as usize + 2)*(SUBDIVISIONS_LEVEL_1 as usize + 2);
     let height_map = perlin::terrain_perlin();
@@ -280,13 +260,13 @@ fn generate_terrain_mesh(x: f32, z: f32, size: f32, subdivisions: u32) -> Mesh {
 }
 
 fn update_water(
-    mut commands: Commands,
+    _commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-    asset_server: Res<AssetServer>,
-    mut water: Query<(Entity,&Handle<Mesh>), (With<Water>)>,
+    _materials: ResMut<Assets<StandardMaterial>>,
+    _asset_server: Res<AssetServer>,
+    mut water: Query<(Entity,&Handle<Mesh>), With<Water> >,
 ) {
-    let Ok((water_ent, water_mesh_handle)) = water.get_single_mut() else {
+    let Ok((_water_ent, water_mesh_handle)) = water.get_single_mut() else {
         return
     };
     let water_mesh = meshes.get_mut(water_mesh_handle).unwrap();
@@ -295,8 +275,8 @@ fn update_water(
         panic!("Unexpected vertex format, expected Float32x3");
     };
     for [x,y] in uv_attr.iter_mut() {
-        *x = *x + WATER_SCROLL_SPEED;
-        *y = *y + WATER_SCROLL_SPEED;
+        *x += WATER_SCROLL_SPEED;
+        *y += WATER_SCROLL_SPEED;
     }
 }
 

@@ -34,17 +34,15 @@ fn setup_audio(
     mut commands: Commands,
     asset_server: Res<AssetServer>
 ) {
-    let stem_names = vec![
-        "audio/cello_stem.ogg",
+    let stem_names = ["audio/cello_stem.ogg",
         "audio/choir_stem.ogg",
         "audio/flautando_stems.ogg",
         "audio/fluitvio_stems.ogg",
         "audio/guitarophone_stem.ogg",
         "audio/halfsec_stems.ogg",
-        "audio/trumpet_stem.ogg"
-    ];
+        "audio/trumpet_stem.ogg"];
 
-    let angle_divisions = PI/stem_names.len() as f32;
+    let _angle_divisions = PI/stem_names.len() as f32;
 
 
     for (i, name) in stem_names.iter().enumerate() {
@@ -54,11 +52,11 @@ fn setup_audio(
 
 
 fn update_audio(
-    mut commands: Commands,
+    _commands: Commands,
     active_poi: Query<&Transform, (With<ActivePointOfInterest>, Without<Player>)>,
     player: Query<&Transform, With<Player>>,
     stems: Query<(&mut AudioSink, &AudioStem)>,
-    time: Res<Time>
+    _time: Res<Time>
 ) {
     if let Ok(active_trans) = active_poi.get_single() {
         if let Ok(player_trans) = player.get_single() {

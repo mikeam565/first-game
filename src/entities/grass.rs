@@ -8,37 +8,24 @@ use bevy::render::primitives::Frustum;
 use bevy::render::render_asset::RenderAssetUsages;
 use bevy::render::render_resource::{AsBindGroup, RenderPipelineDescriptor, SpecializedMeshPipelineError, VertexFormat};
 use bevy::tasks::{block_on, AsyncComputeTaskPool, Task};
-use bevy::{prelude::*, render::{render_resource::PrimitiveTopology, mesh::{self, VertexAttributeValues}}, utils::HashMap};
-use noise::{Perlin, NoiseFn};
+use bevy::{prelude::*, render::{render_resource::PrimitiveTopology, mesh::{self}}, utils::HashMap};
+use noise::NoiseFn;
 use rand::{thread_rng, Rng};
-use crate::util::perlin::{PerlinNoiseEntity, self};
+use crate::util::perlin::{self};
 use futures_lite::future::poll_once;
 use super::player::ContainsPlayer;
 
 // Grass constants
-const GRASS_TILE_SIZE_1: f32 = 32.;
-const NUM_GRASS_1: u32 = 128; // number of grass blades in one row of a tile
-const NUM_GRASS_2: u32 = 32;
-const GRASS_BLADE_VERTICES: u32 = 3;
+const GRASS_TILE_SIZE: f32 = 32.;
+const BLADES_PER_ROW: u32 = 128; // number of grass blades in one row of a tile
 const GRASS_WIDTH: f32 = 0.3;
 const GRASS_HEIGHT: f32 = 2.4;
-const GRASS_BASE_COLOR_1: [f32;4] = [0.102,0.153,0.,1.];
 const GRASS_BASE_COLOR_2: [f32;4] = [0.,0.019,0.,1.];
 pub const GRASS_SECOND_COLOR: [f32;4] = [0.079,0.079,0.,1.];
-const GRASS_SCALE_FACTOR: f32 = 1.0;
 const GRASS_HEIGHT_VARIATION_FACTOR: f32 = 0.2;
 const GRASS_STRAIGHTNESS: f32 = 10.0; // for now, as opposed to a curve factor, just modifying denominator for curve calcs
-const GRASS_SPACING: f32 = 0.3;
 const GRASS_OFFSET: f32 = 0.2;
-const ENABLE_WIREFRAME: bool = false;
-const WIND_STRENGTH: f32 = 1.;
-const WIND_SPEED: f64 = 0.5;
-const WIND_CONSISTENCY: f64 = 50.0; //
-const WIND_LEAN: f32 = 0.0; // determines how already bent grass will be at 0 wind
-const CURVE_POWER: f32 = 1.0; // the linearity / exponentiality of the application/bend of the wind
-const DESPAWN_DISTANCE: f32 = (GRID_SIZE_HALF+1) as f32 * GRASS_TILE_SIZE_1 + GRID_SIZE_HALF as f32;
-const WIND_SIM_TRIGGER_DISTANCE: f32 = 3. * GRASS_TILE_SIZE_1;
-const WIND_SIM_DISTANCE: f32 = WIND_SIM_TRIGGER_DISTANCE - GRASS_TILE_SIZE_1/2.;
+const DESPAWN_DISTANCE: f32 = (GRID_SIZE_HALF+1) as f32 * GRASS_TILE_SIZE + GRID_SIZE_HALF as f32;
 
 const ATTRIBUTE_BASE_Y: MeshVertexAttribute = MeshVertexAttribute::new("BaseY", 988540917, VertexFormat::Float32);
 const ATTRIBUTE_STARTING_POSITION: MeshVertexAttribute = MeshVertexAttribute::new("StartingPosition", 988540916, VertexFormat::Float32x3);
@@ -62,8 +49,6 @@ fn grass_material() -> StandardMaterial {
 // Grass Component
 #[derive(Component)]
 pub struct GrassData {
-    initial_vertices: Vec<Vec3>,
-    initial_positions: Vec<[f32;3]>
 }
 
 #[derive(Component,Clone)]
@@ -121,18 +106,8 @@ pub fn generate_grass_mesh(
     (
         mesh,
         GrassData {
-            initial_vertices: all_verts,
-            initial_positions: grass_offsets
         }
     )
-}
-
-fn grass_data_to_base_data(grass_data: Vec<[f32; 3]>) -> [f32; (GRASS_BLADE_VERTICES * (NUM_GRASS_1*NUM_GRASS_1 + 2)) as usize] {
-    let mut arr = [0.; (GRASS_BLADE_VERTICES * (NUM_GRASS_1*NUM_GRASS_1 + 2)) as usize];
-    for (i, v) in grass_data.iter().enumerate() {
-        arr[i] = v[1];
-    }
-    arr
 }
 
 pub fn generate_grass(
@@ -199,7 +174,7 @@ pub fn generate_single_blade_verts(x: f32, y: f32, z: f32, blade_number: u32, bl
     let verts: Vec<Vec3> = transforms.iter().map(|t| t.translation).collect();
 
     let indices: Vec<u32> = vec![
-        blade_number_shift+0, blade_number_shift+1, blade_number_shift+2,
+        blade_number_shift, blade_number_shift+1, blade_number_shift+2,
         // blade_number_shift+2, blade_number_shift+1, blade_number_shift+3,
         // blade_number_shift+2, blade_number_shift+3, blade_number_shift+4,
         // blade_number_shift+4, blade_number_shift+3, blade_number_shift+5,
@@ -227,7 +202,7 @@ fn apply_curve(transforms: &mut Vec<Transform>, x: f32, y:f32, z: f32) {
     }
 }
 
-pub fn generate_grass_geometry(verts: &Vec<Vec3>, vec_indices: Vec<u32>, mesh: &mut Mesh, grass_offsets: &Vec<[f32; 3]>, colors: Vec<[f32; 4]>) {
+pub fn generate_grass_geometry(verts: &Vec<Vec3>, vec_indices: Vec<u32>, mesh: &mut Mesh, grass_offsets: &[[f32; 3]], colors: Vec<[f32; 4]>) {
     let indices = mesh::Indices::U32(vec_indices);
 
     let vertices: Vec<([f32;3],[f32;3],[f32;2])> = verts.iter().map(|v| { (v.to_array(), [0., 1.,0.], [0.0,0.0])} ).collect();
@@ -236,7 +211,7 @@ pub fn generate_grass_geometry(verts: &Vec<Vec3>, vec_indices: Vec<u32>, mesh: &
     let mut normals = Vec::with_capacity(verts.capacity());
     let bases: Vec<f32> = grass_offsets.iter().map(|x| x[1]).collect();
     // let mut uvs: Vec<[f32; 2]> = Vec::new();
-    for (position, normal, uv) in vertices.iter() {
+    for (position, normal, _uv) in vertices.iter() {
         positions.push(*position);
         normals.push(*normal);
         // uvs.push(*uv);
@@ -250,7 +225,7 @@ pub fn generate_grass_geometry(verts: &Vec<Vec3>, vec_indices: Vec<u32>, mesh: &
     // mesh.generate_tangents().unwrap();
     mesh.insert_attribute(ATTRIBUTE_BASE_Y, bases);
     mesh.insert_attribute(ATTRIBUTE_STARTING_POSITION, positions);
-    mesh.insert_attribute(ATTRIBUTE_WORLD_POSITION, grass_offsets.clone());
+    mesh.insert_attribute(ATTRIBUTE_WORLD_POSITION, grass_offsets.to_vec());
 
 }
 
@@ -264,7 +239,7 @@ enum GrassTileState {
 struct GrassGrid(HashMap<(i32, i32), GrassTileState>);
 
 /// Margin for frustum culling - half diagonal of a tile so corners are considered
-const FRUSTUM_CULLING_MARGIN: f32 = GRASS_TILE_SIZE_1 * 0.70710678118; // sqrt(2)/2
+const FRUSTUM_CULLING_MARGIN: f32 = GRASS_TILE_SIZE * 0.707_106_77; // sqrt(2)/2
 
 /// Check if a point is inside the camera frustum with a margin for tile size
 fn is_point_in_frustum(frustum: &Frustum, point: Vec3) -> bool {
@@ -277,6 +252,7 @@ fn is_point_in_frustum(frustum: &Frustum, point: Vec3) -> bool {
     true
 }
 
+#[allow(clippy::too_many_arguments)]
 fn update_grass(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -299,8 +275,8 @@ fn update_grass(
         // generate grid of grass
         for i in -GRID_SIZE_HALF..=GRID_SIZE_HALF {
             for j in -GRID_SIZE_HALF..=GRID_SIZE_HALF {
-                let a = x + i as f32 * GRASS_TILE_SIZE_1;
-                let b = z + j as f32 * GRASS_TILE_SIZE_1;
+                let a = x + i as f32 * GRASS_TILE_SIZE;
+                let b = z + j as f32 * GRASS_TILE_SIZE;
 
                 // Check if tile center is in camera frustum (use player's y for height estimate)
                 let tile_center = Vec3::new(a, player_trans.translation.y, b);
@@ -310,8 +286,8 @@ fn update_grass(
 
                 if in_frustum {
                     grass_grid.0.insert((a as i32, b as i32), GrassTileState::Spawned);
-                    let contains_player = (player_trans.translation.x - a).abs() < GRASS_TILE_SIZE_1/2. && (player_trans.translation.z - b).abs() < GRASS_TILE_SIZE_1/2.;
-                    let (main_mat, main_grass, main_data) = generate_grass(&mut meshes, &mut materials, a, b, NUM_GRASS_1, GRASS_TILE_SIZE_1);
+                    let contains_player = (player_trans.translation.x - a).abs() < GRASS_TILE_SIZE/2. && (player_trans.translation.z - b).abs() < GRASS_TILE_SIZE/2.;
+                    let (main_mat, main_grass, main_data) = generate_grass(&mut meshes, &mut materials, a, b, BLADES_PER_ROW, GRASS_TILE_SIZE);
                     commands.spawn(main_mat)
                         .insert(main_grass)
                         .insert(main_data)
@@ -329,7 +305,7 @@ fn update_grass(
     } else {
         let thread_pool = AsyncComputeTaskPool::get();
         let mut grass_grid = grid.get_single_mut().unwrap();
-        let elapsed_time = time.elapsed_seconds_f64();
+        let _elapsed_time = time.elapsed_seconds_f64();
         let mut grass_w_player: Option<Entity> = None;
 
         // Helper closure to spawn grass tile asynchronously
@@ -338,7 +314,7 @@ fn update_grass(
             let task_entity = commands.spawn_empty().id();
             let task = thread_pool.spawn(async move {
                 let mut command_queue = CommandQueue::default();
-                let (mesh, grass_data) = generate_grass_mesh(a, b, NUM_GRASS_1, GRASS_TILE_SIZE_1);
+                let (mesh, grass_data) = generate_grass_mesh(a, b, BLADES_PER_ROW, GRASS_TILE_SIZE);
 
                 command_queue.push(move |world: &mut World| {
                     let (grass_mesh_handle, grass_mat_handle) = {
@@ -372,7 +348,7 @@ fn update_grass(
             commands.entity(task_entity).insert(GenGrassTask(task));
         };
 
-        for (ent, mh, grass_data, grass_trans, visibility, mut contains_player) in grass.iter_mut() {
+        for (ent, _mh, _grass_data, grass_trans, _visibility, mut contains_player) in grass.iter_mut() {
             // Use player's y for frustum check since terrain height varies
             let tile_center = Vec3::new(grass_trans.translation.x, player_trans.translation.y, grass_trans.translation.z);
 
@@ -401,34 +377,32 @@ fn update_grass(
             }
 
             // remove or add ContainsPlayer if applicable
-            if (player_trans.translation.x - grass_trans.translation.x).abs() >= GRASS_TILE_SIZE_1/2. || (player_trans.translation.z - grass_trans.translation.z).abs() >= GRASS_TILE_SIZE_1/2. {
+            if (player_trans.translation.x - grass_trans.translation.x).abs() >= GRASS_TILE_SIZE/2. || (player_trans.translation.z - grass_trans.translation.z).abs() >= GRASS_TILE_SIZE/2. {
                 if contains_player.0 {
                     *contains_player = ContainsPlayer(false);
                 }
-            } else {
-                if !contains_player.0 {
-                    *contains_player = ContainsPlayer(true);
-                    // generate new grass tiles around the player
-                    for i in -GRID_SIZE_HALF..=GRID_SIZE_HALF {
-                        for j in -GRID_SIZE_HALF..=GRID_SIZE_HALF {
-                            let a = grass_trans.translation.x + i as f32 * GRASS_TILE_SIZE_1;
-                            let b = grass_trans.translation.z + j as f32 * GRASS_TILE_SIZE_1;
-                            let tile_key = (a as i32, b as i32);
+            } else if !contains_player.0 {
+                *contains_player = ContainsPlayer(true);
+                // generate new grass tiles around the player
+                for i in -GRID_SIZE_HALF..=GRID_SIZE_HALF {
+                    for j in -GRID_SIZE_HALF..=GRID_SIZE_HALF {
+                        let a = grass_trans.translation.x + i as f32 * GRASS_TILE_SIZE;
+                        let b = grass_trans.translation.z + j as f32 * GRASS_TILE_SIZE;
+                        let tile_key = (a as i32, b as i32);
 
-                            // Only spawn if tile doesn't exist in grid
-                            if grass_grid.0.get(&tile_key).is_none() {
-                                let tile_center = Vec3::new(a, player_trans.translation.y, b);
-                                let tile_in_frustum = camera_frustum
-                                    .map(|(frustum, _)| is_point_in_frustum(frustum, tile_center))
-                                    .unwrap_or(true);
+                        // Only spawn if tile doesn't exist in grid
+                        if grass_grid.0.get(&tile_key).is_none() {
+                            let tile_center = Vec3::new(a, player_trans.translation.y, b);
+                            let tile_in_frustum = camera_frustum
+                                .map(|(frustum, _)| is_point_in_frustum(frustum, tile_center))
+                                .unwrap_or(true);
 
-                                if tile_in_frustum {
-                                    grass_grid.0.insert(tile_key, GrassTileState::Spawned);
-                                    spawn_grass_async(&mut commands, a, b);
-                                } else {
-                                    // Mark as culled - will spawn when visible
-                                    grass_grid.0.insert(tile_key, GrassTileState::FrustumCulled);
-                                }
+                            if tile_in_frustum {
+                                grass_grid.0.insert(tile_key, GrassTileState::Spawned);
+                                spawn_grass_async(&mut commands, a, b);
+                            } else {
+                                // Mark as culled - will spawn when visible
+                                grass_grid.0.insert(tile_key, GrassTileState::FrustumCulled);
                             }
                         }
                     }
@@ -436,12 +410,6 @@ fn update_grass(
             }
             if contains_player.0 {
                 grass_w_player = Some(ent);
-            }
-            // simulate wind only if close enough and if visible
-            if (player_trans.translation.x - grass_trans.translation.x).abs() < WIND_SIM_TRIGGER_DISTANCE && (player_trans.translation.z - grass_trans.translation.z).abs() < WIND_SIM_TRIGGER_DISTANCE && visibility.get() {
-                // if let Some(mesh) = meshes.get_mut(mh) {
-                //     apply_wind(mesh, grass_data, &perlin, elapsed_time, player_trans.translation.xz());
-                // }
             }
         }
 
@@ -462,7 +430,7 @@ fn update_grass(
             }
         }
 
-        if let Some(grass_w_player) = grass_w_player {
+        if let Some(_grass_w_player) = grass_w_player {
             // update aabb color
             // commands.get_entity(grass_w_player).unwrap().insert(AabbGizmo {color: Some(Color::RED)});
         }
@@ -482,12 +450,6 @@ fn handle_tasks(mut commands: Commands, mut grass_tasks: Query<&mut GenGrassTask
 #[derive(Component)]
 struct GenGrassTask(Task<CommandQueue>);
 
-#[derive(Resource, Deref)]
-struct GrassMeshHandle(Handle<Mesh>);
-
-#[derive(Resource, Deref)]
-struct GrassMaterialHandle(Handle<StandardMaterial>);
-
 // 
 fn color_gradient_y_based(y: f32, rgba1: [f32; 4], rgba2: [f32; 4]) -> [f32;4] {
     let [r1, g1, b1, a1] = rgba1;
@@ -497,35 +459,6 @@ fn color_gradient_y_based(y: f32, rgba1: [f32; 4], rgba2: [f32; 4]) -> [f32;4] {
     let b = b1 + (b2-b1)*(y/GRASS_HEIGHT);
     let a = a1 + (a2-a1)*(y/GRASS_HEIGHT);
     [r, g, b, a]
-}
-
-fn apply_wind(mesh: &mut Mesh, grass: &GrassData, perlin: &PerlinNoiseEntity, time: f64, player_xz: Vec2) {
-    let wind_perlin = perlin.wind;
-    let pos_attr = mesh.attribute_mut(Mesh::ATTRIBUTE_POSITION).unwrap();
-    let VertexAttributeValues::Float32x3(pos_attr) = pos_attr else {
-        panic!("Unexpected vertex format, expected Float32x3");
-    };
-    // for now modify x,z pos. Ideally apply curve instead
-    for i in 0..pos_attr.len() {
-        let pos = pos_attr.get_mut(i).unwrap(); // current vertex positions
-        let initial = grass.initial_vertices.get(i).unwrap(); // initial vertex positions
-        let grass_pos = grass.initial_positions.get(i).unwrap(); // initial grass positions
-
-        let [x, y, z] = grass_pos;
-
-        let relative_vertex_height = pos[1] - y;
-
-        let curve_amount = 
-            WIND_STRENGTH
-            * ((WIND_SIM_DISTANCE - player_xz.distance(Vec2::new(*x,*z))) / WIND_SIM_DISTANCE).powi(2)
-            * (sample_noise(&wind_perlin, *x, *z, time) * (relative_vertex_height.powf(CURVE_POWER)/GRASS_HEIGHT.powf(CURVE_POWER)));
-        pos[0] = initial.x + curve_amount;
-        pos[2] = initial.z + curve_amount;
-    }
-}
-
-fn sample_noise(perlin: &Perlin, x: f32, z: f32, time: f64) -> f32 {
-    WIND_LEAN + perlin.get([WIND_SPEED * time + (x as f64/WIND_CONSISTENCY), WIND_SPEED * time + (z as f64/WIND_CONSISTENCY)]) as f32
 }
 
 #[derive(Asset, TypePath, AsBindGroup, Debug, Clone)]

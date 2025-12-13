@@ -1,22 +1,18 @@
-use bevy::{core_pipeline::{bloom::BloomSettings, prepass::{DeferredPrepass, DepthPrepass}, tonemapping::Tonemapping, Skybox}, prelude::*, render::{render_resource::{TextureViewDescriptor, TextureViewDimension}, view::ColorGrading}};
-use bevy_atmosphere::{prelude::*, skybox};
-use bevy_rapier3d::prelude::*;
-use bevy::asset::LoadState;
+use bevy::{core_pipeline::{bloom::BloomSettings, tonemapping::Tonemapping}, prelude::*, render::view::ColorGrading};
+use bevy_atmosphere::prelude::*;
 
 use crate::entities::player::Player;
 
-const CAMERA_SPEED: f32 = 10.0;
-const CAMERA_HEIGHT: f32 = 5.0;
 const VIEW_DISTANCE: f32 = 300000.;
 
 pub fn setup_camera(
     mut commands: Commands,
-    asset_server: Res<AssetServer>,
-    mut images: ResMut<Assets<Image>>,
+    _asset_server: Res<AssetServer>,
+    _images: ResMut<Assets<Image>>,
     player: Query<(Entity, &Transform), Added<Player>>
 ) {
     if !player.is_empty() {
-        let (player_entity, player_transform) = player.get_single().unwrap();
+        let (player_entity, _player_transform) = player.get_single().unwrap();
         let cam = commands.spawn((
             Camera3dBundle {
                 camera: Camera {

@@ -1,6 +1,6 @@
 use std::f32::consts::PI;
 
-use bevy::{pbr::{light_consts::lux::{AMBIENT_DAYLIGHT, FULL_MOON_NIGHT}, CascadeShadowConfigBuilder, DirectionalLightShadowMap}, prelude::*};
+use bevy::{pbr::{light_consts::lux::AMBIENT_DAYLIGHT, CascadeShadowConfigBuilder, DirectionalLightShadowMap}, prelude::*};
 use bevy_atmosphere::{collection::nishita::Nishita, model::AtmosphereModel, system_param::AtmosphereMut};
 
 // TODO: blue moonlit sky at night
@@ -50,7 +50,7 @@ fn setup_moon() -> (DirectionalLightBundle,Moon) {
     (
         DirectionalLightBundle {
             directional_light: DirectionalLight {
-                color: Color::rgb(225./255.,255./255.,255./255.),
+                color: Color::rgb(225./255.,1.,1.),
                 shadows_enabled: true,
                 illuminance: 10000.0,
                 ..default()

@@ -1,7 +1,7 @@
 pub mod player;
-pub mod enemy;
 pub mod grass;
-pub mod projectiles;
+#[allow(clippy::eq_op)]
 pub mod terrain;
-pub mod util;
-pub mod poi;
+// pub mod enemy;
+// pub mod projectiles;
+// pub mod poi;

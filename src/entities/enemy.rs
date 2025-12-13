@@ -1,8 +1,6 @@
-use std::f32::consts::PI;
 
 use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
-use crate::entities as ent;
 
 pub const ENEMY_HEIGHT: f32 = 3.0;
 const ENEMY_WIDTH: f32 = 1.0;
@@ -23,7 +21,7 @@ pub fn setup_enemies(
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     let mesh = Mesh::from(shape::Box::new(ENEMY_WIDTH, ENEMY_HEIGHT, ENEMY_WIDTH));
-    let collider_shape = &ComputedColliderShape::TriMesh;
+    let _collider_shape = &ComputedColliderShape::TriMesh;
     commands.spawn(PbrBundle {
         mesh: meshes.add(mesh.clone()),
         material: materials.add(Color::RED),

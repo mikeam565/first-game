@@ -6,7 +6,7 @@ use bevy_rapier3d::control::KinematicCharacterController;
 use noise::NoiseFn;
 use crate::util::{gravity::{GRAVITY_ACC, GRAVITY_DIR}, perlin::PerlinNoiseEntity};
 
-const SPEED: f32 = 20.0;
+const SPEED: f32 = 400.0;
 const ROTATION_SPEED: f32 = 0.3;
 const FIRE_RATE: f32 = 0.5;
 const PLAYER_HEIGHT: f32 = 3.0;

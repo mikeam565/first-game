@@ -270,7 +270,7 @@ fn update_grass(
     // Get camera frustum for visibility checks
     let camera_frustum = camera.get_single().ok();
 
-    if grass.is_empty() {
+    if grass.is_empty() && grid.is_empty() {
         let mut grass_grid = GrassGrid(HashMap::new());
         // generate grid of grass
         for i in -GRID_SIZE_HALF..=GRID_SIZE_HALF {

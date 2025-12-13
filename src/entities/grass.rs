@@ -1,18 +1,15 @@
-use std::borrow::BorrowMut;
 
-use crate::entities::{terrain, player};
+use crate::entities::terrain;
 use crate::{entities, util::perlin::sample_terrain_height};
 use bevy::ecs::system::{CommandQueue, SystemState};
-use bevy::pbr::{ExtendedMaterial, MaterialExtension, MaterialExtensionKey, MaterialExtensionPipeline, MaterialPipeline, NotShadowReceiver};
-use bevy::render::color;
+use bevy::pbr::{ExtendedMaterial, MaterialExtension, MaterialExtensionKey, MaterialExtensionPipeline};
 use bevy::render::mesh::{MeshVertexAttribute, MeshVertexBufferLayout};
-use bevy::render::primitives::Aabb;
+use bevy::render::primitives::Frustum;
 use bevy::render::render_asset::RenderAssetUsages;
-use bevy::render::render_resource::{AsBindGroup, GpuArrayBuffer, RenderPipelineDescriptor, ShaderRef, SpecializedMeshPipelineError, VertexFormat};
+use bevy::render::render_resource::{AsBindGroup, RenderPipelineDescriptor, SpecializedMeshPipelineError, VertexFormat};
 use bevy::tasks::{block_on, AsyncComputeTaskPool, Task};
-use bevy::{prelude::*, render::{render_resource::{PrimitiveTopology, Face}, mesh::{self, VertexAttributeValues}}, utils::HashMap};
+use bevy::{prelude::*, render::{render_resource::PrimitiveTopology, mesh::{self, VertexAttributeValues}}, utils::HashMap};
 use noise::{Perlin, NoiseFn};
-use rand::distributions::Standard;
 use rand::{thread_rng, Rng};
 use crate::util::perlin::{PerlinNoiseEntity, self};
 use futures_lite::future::poll_once;
@@ -20,7 +17,6 @@ use super::player::ContainsPlayer;
 
 // Grass constants
 const GRASS_TILE_SIZE_1: f32 = 32.;
-const GRASS_TILE_SIZE_2: f32 = 32.; // TODO: like terrain, this causes overlaps if bigger than SIZE_1
 const NUM_GRASS_1: u32 = 128; // number of grass blades in one row of a tile
 const NUM_GRASS_2: u32 = 32;
 const GRASS_BLADE_VERTICES: u32 = 3;
@@ -258,8 +254,28 @@ pub fn generate_grass_geometry(verts: &Vec<Vec3>, vec_indices: Vec<u32>, mesh: &
 
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum GrassTileState {
+    Spawned,
+    FrustumCulled,
+}
+
 #[derive(Component)]
-struct GrassGrid(HashMap<(i32,i32), bool>);
+struct GrassGrid(HashMap<(i32, i32), GrassTileState>);
+
+/// Margin for frustum culling - half diagonal of a tile so corners are considered
+const FRUSTUM_CULLING_MARGIN: f32 = GRASS_TILE_SIZE_1 * 0.70710678118; // sqrt(2)/2
+
+/// Check if a point is inside the camera frustum with a margin for tile size
+fn is_point_in_frustum(frustum: &Frustum, point: Vec3) -> bool {
+    for half_space in &frustum.half_spaces {
+        // Add margin so tiles aren't culled when corners might still be visible
+        if half_space.normal_d().dot(point.extend(1.0)) < -FRUSTUM_CULLING_MARGIN {
+            return false;
+        }
+    }
+    true
+}
 
 fn update_grass(
     mut commands: Commands,
@@ -267,13 +283,17 @@ fn update_grass(
     mut materials: ResMut<Assets<ExtendedMaterial<StandardMaterial,GrassMaterialExtension>>>,
     mut grass: Query<(Entity, &Handle<Mesh>, &GrassData, &Transform, &ViewVisibility, &mut ContainsPlayer), With<Grass>>,
     mut grid: Query<&mut GrassGrid>,
-    perlin: Res<PerlinNoiseEntity>,
     time: Res<Time>,
     player: Query<(Entity,&Transform),With<entities::player::Player>>,
+    camera: Query<(&Frustum, &GlobalTransform), With<Camera3d>>,
 ) {
-    let (plyr_e, player_trans) = player.get_single().unwrap();
+    let (_, player_trans) = player.get_single().unwrap();
     let x = player_trans.translation.x;
     let z = player_trans.translation.z;
+
+    // Get camera frustum for visibility checks
+    let camera_frustum = camera.get_single().ok();
+
     if grass.is_empty() {
         let mut grass_grid = GrassGrid(HashMap::new());
         // generate grid of grass
@@ -281,17 +301,28 @@ fn update_grass(
             for j in -GRID_SIZE_HALF..=GRID_SIZE_HALF {
                 let a = x + i as f32 * GRASS_TILE_SIZE_1;
                 let b = z + j as f32 * GRASS_TILE_SIZE_1;
-                grass_grid.0.insert((a as i32, b as i32), true);
-                let contains_player = (player_trans.translation.x - a).abs() < GRASS_TILE_SIZE_1/2. && (player_trans.translation.z - b).abs() < GRASS_TILE_SIZE_1/2.;
-                let color = if contains_player { Color::RED } else { Color::PURPLE };
-                let (main_mat, main_grass, main_data) = generate_grass(&mut meshes, &mut materials, a, b, NUM_GRASS_1, GRASS_TILE_SIZE_1);
-                commands.spawn(main_mat)
-                    .insert(main_grass)
-                    .insert(main_data)
-                    .insert(ContainsPlayer(contains_player))
-                    // .insert(NotShadowReceiver)
-                    // .insert(ShowAabbGizmo {color: Some(color)})
-                    ;
+
+                // Check if tile center is in camera frustum (use player's y for height estimate)
+                let tile_center = Vec3::new(a, player_trans.translation.y, b);
+                let in_frustum = camera_frustum
+                    .map(|(frustum, _)| is_point_in_frustum(frustum, tile_center))
+                    .unwrap_or(true);
+
+                if in_frustum {
+                    grass_grid.0.insert((a as i32, b as i32), GrassTileState::Spawned);
+                    let contains_player = (player_trans.translation.x - a).abs() < GRASS_TILE_SIZE_1/2. && (player_trans.translation.z - b).abs() < GRASS_TILE_SIZE_1/2.;
+                    let (main_mat, main_grass, main_data) = generate_grass(&mut meshes, &mut materials, a, b, NUM_GRASS_1, GRASS_TILE_SIZE_1);
+                    commands.spawn(main_mat)
+                        .insert(main_grass)
+                        .insert(main_data)
+                        .insert(ContainsPlayer(contains_player))
+                        // .insert(NotShadowReceiver)
+                        // .insert(ShowAabbGizmo {color: Some(color)})
+                        ;
+                } else {
+                    // Mark as frustum culled - will spawn when visible
+                    grass_grid.0.insert((a as i32, b as i32), GrassTileState::FrustumCulled);
+                }
             }
         }
         commands.spawn(grass_grid);
@@ -300,7 +331,75 @@ fn update_grass(
         let mut grass_grid = grid.get_single_mut().unwrap();
         let elapsed_time = time.elapsed_seconds_f64();
         let mut grass_w_player: Option<Entity> = None;
+
+        // Helper closure to spawn grass tile asynchronously
+        let spawn_grass_async = |commands: &mut Commands, a: f32, b: f32| {
+            let transform = Transform::from_xyz(a, 0., b);
+            let task_entity = commands.spawn_empty().id();
+            let task = thread_pool.spawn(async move {
+                let mut command_queue = CommandQueue::default();
+                let (mesh, grass_data) = generate_grass_mesh(a, b, NUM_GRASS_1, GRASS_TILE_SIZE_1);
+
+                command_queue.push(move |world: &mut World| {
+                    let (grass_mesh_handle, grass_mat_handle) = {
+                        let mut system_state = SystemState::<(ResMut<Assets<Mesh>>, ResMut<Assets<ExtendedMaterial<StandardMaterial,GrassMaterialExtension>>>)>::new(world);
+                        let (mut meshes, mut mats) = system_state.get_mut(world);
+
+                        (meshes.add(mesh), mats.add(ExtendedMaterial {
+                            base: grass_material(),
+                            extension: GrassMaterialExtension {}
+                        }))
+                    };
+
+                    world.entity_mut(task_entity)
+                    .insert(MaterialMeshBundle {
+                        mesh: grass_mesh_handle,
+                        material: grass_mat_handle,
+                        transform,
+                        ..default()
+                    })
+                    .insert(Grass)
+                    .insert(grass_data)
+                    .insert(ContainsPlayer(false))
+                    // .insert(NotShadowReceiver)
+                    // .insert(ShowAabbGizmo {color: Some(Color::PURPLE)})
+                    .remove::<GenGrassTask>();
+                });
+
+                command_queue
+            });
+
+            commands.entity(task_entity).insert(GenGrassTask(task));
+        };
+
         for (ent, mh, grass_data, grass_trans, visibility, mut contains_player) in grass.iter_mut() {
+            // Use player's y for frustum check since terrain height varies
+            let tile_center = Vec3::new(grass_trans.translation.x, player_trans.translation.y, grass_trans.translation.z);
+
+            // Check if tile is in camera frustum
+            let in_frustum = camera_frustum
+                .map(|(frustum, _)| is_point_in_frustum(frustum, tile_center))
+                .unwrap_or(true);
+
+            // Distance-based despawn (completely remove from grid when too far)
+            if (player_trans.translation.x - grass_trans.translation.x).abs() > DESPAWN_DISTANCE
+                || (player_trans.translation.z - grass_trans.translation.z).abs() > DESPAWN_DISTANCE
+            {
+                grass_grid.0.remove(&(grass_trans.translation.x as i32, grass_trans.translation.z as i32));
+                commands.get_entity(ent).unwrap().despawn_recursive();
+                continue;
+            }
+
+            // Frustum culling - despawn if outside view but keep in grid as culled
+            if !in_frustum {
+                grass_grid.0.insert(
+                    (grass_trans.translation.x as i32, grass_trans.translation.z as i32),
+                    GrassTileState::FrustumCulled
+                );
+                commands.get_entity(ent).unwrap().despawn_recursive();
+                continue;
+            }
+
             // remove or add ContainsPlayer if applicable
             if (player_trans.translation.x - grass_trans.translation.x).abs() >= GRASS_TILE_SIZE_1/2. || (player_trans.translation.z - grass_trans.translation.z).abs() >= GRASS_TILE_SIZE_1/2. {
                 if contains_player.0 {
@@ -309,64 +408,30 @@ fn update_grass(
             } else {
                 if !contains_player.0 {
                     *contains_player = ContainsPlayer(true);
-                    // generate new grass
+                    // generate new grass tiles around the player
                     for i in -GRID_SIZE_HALF..=GRID_SIZE_HALF {
                         for j in -GRID_SIZE_HALF..=GRID_SIZE_HALF {
                             let a = grass_trans.translation.x + i as f32 * GRASS_TILE_SIZE_1;
                             let b = grass_trans.translation.z + j as f32 * GRASS_TILE_SIZE_1;
-                            if let false = *grass_grid.0.get(&(a as i32,b as i32)).unwrap_or(&false) {
-                                grass_grid.0.insert((a as i32, b as i32), true);
-                                // todo: async way
-                                let transform = Transform::from_xyz(a,0.,b);
-    
-                                let task_entity = commands.spawn_empty().id();
-                                let task = thread_pool.spawn(async move {
-                                    let mut command_queue = CommandQueue::default();
-                                    let (mesh, grass_data) = generate_grass_mesh(a, b, NUM_GRASS_1, GRASS_TILE_SIZE_1);
-    
-                                    command_queue.push(move |world: &mut World| {
-                                        let (grass_mesh_handle, grass_mat_handle) = {
-                                            let mut system_state = SystemState::<(ResMut<Assets<Mesh>>, ResMut<Assets<ExtendedMaterial<StandardMaterial,GrassMaterialExtension>>>)>::new(world);
-                                            let (mut meshes, mut mats) = system_state.get_mut(world);
-    
-                                            (meshes.add(mesh), mats.add(ExtendedMaterial {
-                                                base: grass_material(),
-                                                extension: GrassMaterialExtension {}
-                                            }))
-                                        };
-    
-                                        world.entity_mut(task_entity)
-                                        .insert(MaterialMeshBundle {
-                                            mesh: grass_mesh_handle,
-                                            material: grass_mat_handle,
-                                            transform,
-                                            ..default()
-                                        })
-                                        .insert(Grass)
-                                        .insert(grass_data)
-                                        .insert(ContainsPlayer(false))
-                                        // .insert(NotShadowReceiver)
-                                        // .insert(ShowAabbGizmo {color: Some(Color::PURPLE)})
-                                        .remove::<GenGrassTask>();
-                                    });
-    
-                                    command_queue
-                                });
-    
-                                commands.entity(task_entity).insert(GenGrassTask(task)); // spawn a task marked GenGrassTask in the world to be handled by handle_tasks fn when complete
+                            let tile_key = (a as i32, b as i32);
 
-                            //     // old way (sync)
-                            //     let (main_mat, main_grass, main_data) = generate_grass(&mut commands, &mut meshes, &mut materials, a, b, NUM_GRASS_1, GRASS_TILE_SIZE_1);
-                            //     commands.spawn(main_mat)
-                            //         .insert(main_grass)
-                            //         .insert(main_data)
-                            //         .insert(ContainsPlayer(false))
-                            //         // .insert(ShowAabbGizmo {color: Some(Color::PURPLE)})
-                            //         ;
+                            // Only spawn if tile doesn't exist in grid
+                            if grass_grid.0.get(&tile_key).is_none() {
+                                let tile_center = Vec3::new(a, player_trans.translation.y, b);
+                                let tile_in_frustum = camera_frustum
+                                    .map(|(frustum, _)| is_point_in_frustum(frustum, tile_center))
+                                    .unwrap_or(true);
+
+                                if tile_in_frustum {
+                                    grass_grid.0.insert(tile_key, GrassTileState::Spawned);
+                                    spawn_grass_async(&mut commands, a, b);
+                                } else {
+                                    // Mark as culled - will spawn when visible
+                                    grass_grid.0.insert(tile_key, GrassTileState::FrustumCulled);
+                                }
                             }
                         }
                     }
-
                 }
             }
             if contains_player.0 {
@@ -377,9 +442,23 @@ fn update_grass(
                 // if let Some(mesh) = meshes.get_mut(mh) {
                 //     apply_wind(mesh, grass_data, &perlin, elapsed_time, player_trans.translation.xz());
                 // }
-            } else if (player_trans.translation.x - grass_trans.translation.x).abs() > DESPAWN_DISTANCE || (player_trans.translation.z - grass_trans.translation.z).abs() > DESPAWN_DISTANCE {
-                grass_grid.0.insert((grass_trans.translation.x as i32, grass_trans.translation.z as i32), false);
-                commands.get_entity(ent).unwrap().despawn_recursive();
+            }
+        }
+
+        // Respawn tiles that were frustum culled but are now visible
+        if let Some((frustum, _)) = camera_frustum {
+            let culled_tiles: Vec<(i32, i32)> = grass_grid.0
+                .iter()
+                .filter(|(_, state)| **state == GrassTileState::FrustumCulled)
+                .map(|(pos, _)| *pos)
+                .collect();
+
+            for (a, b) in culled_tiles {
+                let tile_center = Vec3::new(a as f32, player_trans.translation.y, b as f32);
+                if is_point_in_frustum(frustum, tile_center) {
+                    grass_grid.0.insert((a, b), GrassTileState::Spawned);
+                    spawn_grass_async(&mut commands, a as f32, b as f32);
+                }
             }
         }
 

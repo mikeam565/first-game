@@ -1,17 +1,18 @@
 use bevy::render::texture::{ImageAddressMode, ImageLoaderSettings, ImageSampler, ImageSamplerDescriptor};
 use bevy::{prelude::*, render::render_resource::Face};
+use bevy::math::Vec3A;
 use bevy::render::mesh::VertexAttributeValues;
 use bevy::render::render_asset::RenderAssetUsages;
 use bevy::render::render_resource::PrimitiveTopology;
 use bevy::render::mesh::Indices;
-use bevy::render::primitives::Frustum;
+use bevy::render::primitives::Aabb;
 use bevy::utils::HashMap;
 use bevy::ecs::system::{CommandQueue, SystemState};
 use bevy::tasks::{block_on, AsyncComputeTaskPool, Task};
 use futures_lite::future::poll_once;
 use crate::entities::player;
 use crate::util::perlin::{self, sample_terrain_height};
-use crate::util::render_state::{RenderState, FrustumHidden};
+use crate::util::render_state::RenderState;
 use bevy_rapier3d::prelude::*;
 
 // Chunk configuration
@@ -50,8 +51,9 @@ const COLOR_TEMPERATE: [f32;4] = [0.079,0.079,0.,1.];
 const COLOR_SAND: [f32;4] = [80./255., 72./255., 49./255., 255./255.];
 const COLOR_PEAKS: [f32;4] = [255./255.,255./255.,255./255.,255./255.];
 
-/// Margin for frustum culling - accounts for terrain height variations
-const FRUSTUM_CULLING_MARGIN: f32 = CHUNK_SIZE * 1.5;
+/// Terrain height range for Aabb calculation (min to max possible height)
+const TERRAIN_MIN_HEIGHT: f32 = 0.0;
+const TERRAIN_MAX_HEIGHT: f32 = 1500.0; // HEIGHT_PEAKS approximation
 
 // Terrain chunk component
 #[derive(Component)]
@@ -71,10 +73,6 @@ pub struct TerrainChunkState {
 impl TerrainChunkState {
     pub fn visible(lod_level: u32) -> Self {
         Self { render_state: RenderState::Visible, lod_level }
-    }
-
-    pub fn hidden(lod_level: u32) -> Self {
-        Self { render_state: RenderState::Hidden, lod_level }
     }
 
     pub fn pending() -> Self {
@@ -106,14 +104,15 @@ fn get_lod_level(chunk_distance: i32) -> u32 {
     }
 }
 
-/// Check if a point is inside the camera frustum with a margin
-fn is_chunk_in_frustum(frustum: &Frustum, chunk_center: Vec3) -> bool {
-    for half_space in &frustum.half_spaces {
-        if half_space.normal_d().dot(chunk_center.extend(1.0)) < -FRUSTUM_CULLING_MARGIN {
-            return false;
-        }
+/// Create an Aabb for a terrain chunk (centered at local origin)
+fn terrain_chunk_aabb() -> Aabb {
+    let half_size = CHUNK_SIZE / 2.0;
+    let height_range = TERRAIN_MAX_HEIGHT - TERRAIN_MIN_HEIGHT;
+    let center_y = (TERRAIN_MIN_HEIGHT + TERRAIN_MAX_HEIGHT) / 2.0;
+    Aabb {
+        center: Vec3A::new(0.0, center_y, 0.0),
+        half_extents: Vec3A::new(half_size, height_range / 2.0, half_size),
     }
-    true
 }
 
 /// Convert world position to chunk coordinates
@@ -139,17 +138,13 @@ pub fn update_terrain(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     asset_server: Res<AssetServer>,
-    terrain_chunks: Query<(Entity, &Terrain, &Handle<Mesh>, Option<&TerrainCollider>, Option<&FrustumHidden>)>,
+    terrain_chunks: Query<(Entity, &Terrain, &Handle<Mesh>, Option<&TerrainCollider>)>,
     mut grid_query: Query<&mut TerrainGrid>,
     player: Query<&Transform, With<player::Player>>,
-    camera: Query<(&Frustum, &GlobalTransform), With<Camera3d>>,
 ) {
     let Ok(player_trans) = player.get_single() else { return };
     let player_pos = player_trans.translation;
     let (player_chunk_x, player_chunk_z) = world_to_chunk(player_pos.x, player_pos.z);
-
-    // Get camera frustum for visibility checks
-    let camera_frustum = camera.get_single().ok();
 
     if terrain_chunks.is_empty() {
         // Initial spawn - create terrain grid and spawn chunks
@@ -159,45 +154,33 @@ pub fn update_terrain(
             for dz in -CHUNKS_RADIUS..=CHUNKS_RADIUS {
                 let chunk_x = player_chunk_x + dx;
                 let chunk_z = player_chunk_z + dz;
-                let (world_x, world_z) = chunk_to_world(chunk_x, chunk_z);
 
                 // Calculate distance for LOD
                 let chunk_distance = dx.abs().max(dz.abs());
                 let lod_level = get_lod_level(chunk_distance);
 
-                // Check frustum visibility
-                let chunk_center = Vec3::new(world_x, player_pos.y, world_z);
-                let in_frustum = camera_frustum
-                    .map(|(frustum, _)| is_chunk_in_frustum(frustum, chunk_center))
-                    .unwrap_or(true);
-
-                if in_frustum {
-                    // Spawn chunks with colliders synchronously (player needs them immediately)
-                    // Spawn distant chunks asynchronously
-                    if chunk_distance <= COLLIDER_DISTANCE {
-                        terrain_grid.0.insert((chunk_x, chunk_z), TerrainChunkState::visible(lod_level));
-                        spawn_terrain_chunk(
-                            &mut commands,
-                            &mut meshes,
-                            &mut materials,
-                            chunk_x,
-                            chunk_z,
-                            lod_level,
-                            true,
-                        );
-                    } else {
-                        terrain_grid.0.insert((chunk_x, chunk_z), TerrainChunkState::pending());
-                        spawn_terrain_chunk_async(
-                            &mut commands,
-                            chunk_x,
-                            chunk_z,
-                            lod_level,
-                            false,
-                        );
-                    }
+                // Spawn chunks with colliders synchronously (player needs them immediately)
+                // Spawn distant chunks asynchronously
+                if chunk_distance <= COLLIDER_DISTANCE {
+                    terrain_grid.0.insert((chunk_x, chunk_z), TerrainChunkState::visible(lod_level));
+                    spawn_terrain_chunk(
+                        &mut commands,
+                        &mut meshes,
+                        &mut materials,
+                        chunk_x,
+                        chunk_z,
+                        lod_level,
+                        true,
+                    );
                 } else {
-                    // Mark as hidden in the grid - no entity spawned yet
-                    terrain_grid.0.insert((chunk_x, chunk_z), TerrainChunkState::hidden(lod_level));
+                    terrain_grid.0.insert((chunk_x, chunk_z), TerrainChunkState::pending());
+                    spawn_terrain_chunk_async(
+                        &mut commands,
+                        chunk_x,
+                        chunk_z,
+                        lod_level,
+                        false,
+                    );
                 }
             }
         }
@@ -209,7 +192,7 @@ pub fn update_terrain(
         let Ok(mut terrain_grid) = grid_query.get_single_mut() else { return };
 
         // Update grid state for completed async tasks (Pending -> Visible)
-        for (_, terrain, _, _, _) in terrain_chunks.iter() {
+        for (_, terrain, _, _) in terrain_chunks.iter() {
             if let Some(state) = terrain_grid.0.get(&(terrain.chunk_x, terrain.chunk_z)) {
                 if state.render_state == RenderState::Pending {
                     terrain_grid.0.insert((terrain.chunk_x, terrain.chunk_z), TerrainChunkState::visible(terrain.lod_level));
@@ -217,17 +200,15 @@ pub fn update_terrain(
             }
         }
 
-        // Track chunks to despawn (too far), hide (frustum culled), or show (was hidden, now visible)
+        // Track chunks to despawn (too far) or update (LOD/collider change)
         let mut chunks_to_despawn: Vec<Entity> = Vec::new();
-        let mut chunks_to_hide: Vec<(Entity, i32, i32, u32)> = Vec::new();
-        let mut chunks_to_show: Vec<Entity> = Vec::new();
         let mut chunks_to_update: Vec<(Entity, i32, i32, u32, Handle<Mesh>)> = Vec::new();
         // Track chunks that need collider added/removed (without LOD change)
         let mut chunks_need_collider: Vec<(Entity, Handle<Mesh>)> = Vec::new();
         let mut chunks_remove_collider: Vec<Entity> = Vec::new();
 
-        // Check existing chunks for despawn/hide/show/LOD update/collider update
-        for (entity, terrain, mesh_handle, has_collider, is_hidden) in terrain_chunks.iter() {
+        // Check existing chunks for despawn/LOD update/collider update
+        for (entity, terrain, mesh_handle, has_collider) in terrain_chunks.iter() {
             let dx = terrain.chunk_x - player_chunk_x;
             let dz = terrain.chunk_z - player_chunk_z;
             let chunk_distance = dx.abs().max(dz.abs());
@@ -237,27 +218,6 @@ pub fn update_terrain(
                 terrain_grid.0.remove(&(terrain.chunk_x, terrain.chunk_z));
                 chunks_to_despawn.push(entity);
                 continue;
-            }
-
-            // Check frustum visibility
-            let (world_x, world_z) = chunk_to_world(terrain.chunk_x, terrain.chunk_z);
-            let chunk_center = Vec3::new(world_x, player_pos.y, world_z);
-            let in_frustum = camera_frustum
-                .map(|(frustum, _)| is_chunk_in_frustum(frustum, chunk_center))
-                .unwrap_or(true);
-
-            if !in_frustum {
-                // Hide instead of despawn - only if not already hidden
-                if is_hidden.is_none() {
-                    chunks_to_hide.push((entity, terrain.chunk_x, terrain.chunk_z, terrain.lod_level));
-                }
-                continue;
-            }
-
-            // If was hidden but now in frustum, show it
-            if is_hidden.is_some() {
-                chunks_to_show.push(entity);
-                terrain_grid.0.insert((terrain.chunk_x, terrain.chunk_z), TerrainChunkState::visible(terrain.lod_level));
             }
 
             // Check if LOD needs to change
@@ -278,21 +238,6 @@ pub fn update_terrain(
         // Despawn chunks that are too far
         for entity in chunks_to_despawn {
             commands.entity(entity).despawn_recursive();
-        }
-
-        // Hide chunks outside frustum (keep entity, just hide it)
-        for (entity, chunk_x, chunk_z, lod_level) in chunks_to_hide {
-            terrain_grid.0.insert((chunk_x, chunk_z), TerrainChunkState::hidden(lod_level));
-            commands.entity(entity)
-                .insert(FrustumHidden)
-                .insert(Visibility::Hidden);
-        }
-
-        // Show chunks that were hidden but are now visible
-        for entity in chunks_to_show {
-            commands.entity(entity)
-                .remove::<FrustumHidden>()
-                .insert(Visibility::Visible);
         }
 
         // Update LOD for existing chunks
@@ -356,36 +301,13 @@ pub fn update_terrain(
                 // Check if chunk already exists or is being handled
                 let existing_state = terrain_grid.0.get(&(chunk_x, chunk_z));
 
-                let (world_x, world_z) = chunk_to_world(chunk_x, chunk_z);
-                let chunk_center = Vec3::new(world_x, player_pos.y, world_z);
-                let in_frustum = camera_frustum
-                    .map(|(frustum, _)| is_chunk_in_frustum(frustum, chunk_center))
-                    .unwrap_or(true);
-
                 match existing_state {
                     None => {
-                        // New chunk - queue for spawn if in frustum
-                        if in_frustum {
-                            let chunk_distance = dx.abs().max(dz.abs());
-                            let lod_level = get_lod_level(chunk_distance);
-                            let needs_collider = chunk_distance <= COLLIDER_DISTANCE;
-                            chunks_to_spawn.push((chunk_x, chunk_z, chunk_distance, lod_level, needs_collider));
-                        } else {
-                            // Mark as hidden in grid - no entity exists yet
-                            let chunk_distance = dx.abs().max(dz.abs());
-                            let lod_level = get_lod_level(chunk_distance);
-                            terrain_grid.0.insert((chunk_x, chunk_z), TerrainChunkState::hidden(lod_level));
-                        }
-                    }
-                    Some(state) if state.render_state == RenderState::Hidden => {
-                        // Hidden chunk - if in frustum and no entity exists, spawn it
-                        // (Entities with FrustumHidden are handled above in the show logic)
-                        if in_frustum {
-                            let chunk_distance = dx.abs().max(dz.abs());
-                            let lod_level = get_lod_level(chunk_distance);
-                            let needs_collider = chunk_distance <= COLLIDER_DISTANCE;
-                            chunks_to_spawn.push((chunk_x, chunk_z, chunk_distance, lod_level, needs_collider));
-                        }
+                        // New chunk - queue for spawn
+                        let chunk_distance = dx.abs().max(dz.abs());
+                        let lod_level = get_lod_level(chunk_distance);
+                        let needs_collider = chunk_distance <= COLLIDER_DISTANCE;
+                        chunks_to_spawn.push((chunk_x, chunk_z, chunk_distance, lod_level, needs_collider));
                     }
                     Some(state) if state.render_state == RenderState::Pending => {
                         // Already being generated - nothing to do
@@ -505,11 +427,13 @@ fn spawn_terrain_chunk(
         ..default()
     });
 
-    entity_commands.insert(Terrain {
-        chunk_x,
-        chunk_z,
-        lod_level: subdivisions,
-    });
+    entity_commands
+        .insert(Terrain {
+            chunk_x,
+            chunk_z,
+            lod_level: subdivisions,
+        })
+        .insert(terrain_chunk_aabb());
 
     if with_collider {
         let collider_shape = ComputedColliderShape::TriMesh;
@@ -533,6 +457,7 @@ fn spawn_terrain_chunk_async(
     let thread_pool = AsyncComputeTaskPool::get();
     let (world_x, world_z) = chunk_to_world(chunk_x, chunk_z);
     let transform = Transform::from_xyz(world_x, 0., world_z);
+    let aabb = terrain_chunk_aabb();
 
     let task_entity = commands.spawn_empty().id();
 
@@ -577,6 +502,7 @@ fn spawn_terrain_chunk_async(
                     chunk_z,
                     lod_level: subdivisions,
                 })
+                .insert(aabb)
                 .remove::<GenTerrainTask>();
 
             // Add collider if needed

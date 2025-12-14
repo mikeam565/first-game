@@ -1,9 +1,10 @@
 use crate::entities::terrain;
 use crate::{entities, util::perlin::sample_terrain_height};
 use bevy::ecs::system::{CommandQueue, SystemState};
+use bevy::math::Vec3A;
 use bevy::pbr::{ExtendedMaterial, MaterialExtension, MaterialExtensionKey, MaterialExtensionPipeline};
 use bevy::render::mesh::{MeshVertexAttribute, MeshVertexBufferLayout};
-use bevy::render::primitives::Frustum;
+use bevy::render::primitives::Aabb;
 use bevy::render::render_asset::RenderAssetUsages;
 use bevy::render::render_resource::{AsBindGroup, RenderPipelineDescriptor, SpecializedMeshPipelineError, VertexFormat};
 use bevy::tasks::{block_on, AsyncComputeTaskPool, Task};
@@ -11,7 +12,7 @@ use bevy::{prelude::*, render::{render_resource::PrimitiveTopology, mesh::{self}
 use noise::NoiseFn;
 use rand::{thread_rng, Rng};
 use crate::util::perlin::{self};
-use crate::util::render_state::{RenderState, FrustumHidden};
+use crate::util::render_state::RenderState;
 use futures_lite::future::poll_once;
 use super::player::ContainsPlayer;
 
@@ -240,10 +241,6 @@ impl GrassTileState {
         Self { render_state: RenderState::Visible }
     }
 
-    pub fn hidden() -> Self {
-        Self { render_state: RenderState::Hidden }
-    }
-
     pub fn pending() -> Self {
         Self { render_state: RenderState::Pending }
     }
@@ -252,18 +249,19 @@ impl GrassTileState {
 #[derive(Component)]
 struct GrassGrid(HashMap<(i32, i32), GrassTileState>);
 
-/// Margin for frustum culling - half diagonal of a tile so corners are considered
-const FRUSTUM_CULLING_MARGIN: f32 = GRASS_TILE_SIZE * 0.707_106_77; // sqrt(2)/2
-
-/// Check if a point is inside the camera frustum with a margin for tile size
-fn is_point_in_frustum(frustum: &Frustum, point: Vec3) -> bool {
-    for half_space in &frustum.half_spaces {
-        // Add margin so tiles aren't culled when corners might still be visible
-        if half_space.normal_d().dot(point.extend(1.0)) < -FRUSTUM_CULLING_MARGIN {
-            return false;
-        }
+/// Create an Aabb for a grass tile (centered at local origin)
+/// Grass mesh vertices are at actual terrain heights (not relative to transform)
+fn grass_tile_aabb() -> Aabb {
+    let half_size = GRASS_TILE_SIZE / 2.0;
+    // Grass exists in temperate zone (210-800) plus grass height above terrain
+    let min_height = terrain::HEIGHT_TEMPERATE_START - 10.0;
+    let max_height = terrain::HEIGHT_TEMPERATE_END + GRASS_HEIGHT * 1.5;
+    let center_y = (min_height + max_height) / 2.0;
+    let half_height = (max_height - min_height) / 2.0;
+    Aabb {
+        center: Vec3A::new(0.0, center_y, 0.0),
+        half_extents: Vec3A::new(half_size, half_height, half_size),
     }
-    true
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -271,48 +269,32 @@ fn update_grass(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ExtendedMaterial<StandardMaterial,GrassMaterialExtension>>>,
-    mut grass: Query<(Entity, &Handle<Mesh>, &GrassData, &Transform, &ViewVisibility, &mut ContainsPlayer, Option<&FrustumHidden>), With<Grass>>,
+    mut grass: Query<(Entity, &Handle<Mesh>, &GrassData, &Transform, &ViewVisibility, &mut ContainsPlayer), With<Grass>>,
     mut grid: Query<&mut GrassGrid>,
     time: Res<Time>,
     player: Query<(Entity,&Transform),With<entities::player::Player>>,
-    camera: Query<(&Frustum, &GlobalTransform), With<Camera3d>>,
 ) {
     let (_, player_trans) = player.get_single().unwrap();
     let x = player_trans.translation.x;
     let z = player_trans.translation.z;
 
-    // Get camera frustum for visibility checks
-    let camera_frustum = camera.get_single().ok();
-
     if grass.is_empty() && grid.is_empty() {
         let mut grass_grid = GrassGrid(HashMap::new());
+        let aabb = grass_tile_aabb();
         // generate grid of grass
         for i in -GRID_SIZE_HALF..=GRID_SIZE_HALF {
             for j in -GRID_SIZE_HALF..=GRID_SIZE_HALF {
                 let a = x + i as f32 * GRASS_TILE_SIZE;
                 let b = z + j as f32 * GRASS_TILE_SIZE;
 
-                // Check if tile center is in camera frustum (use player's y for height estimate)
-                let tile_center = Vec3::new(a, player_trans.translation.y, b);
-                let in_frustum = camera_frustum
-                    .map(|(frustum, _)| is_point_in_frustum(frustum, tile_center))
-                    .unwrap_or(true);
-
-                if in_frustum {
-                    grass_grid.0.insert((a as i32, b as i32), GrassTileState::visible());
-                    let contains_player = (player_trans.translation.x - a).abs() < GRASS_TILE_SIZE/2. && (player_trans.translation.z - b).abs() < GRASS_TILE_SIZE/2.;
-                    let (main_mat, main_grass, main_data) = generate_grass(&mut meshes, &mut materials, a, b, BLADES_PER_ROW, GRASS_TILE_SIZE);
-                    commands.spawn(main_mat)
-                        .insert(main_grass)
-                        .insert(main_data)
-                        .insert(ContainsPlayer(contains_player))
-                        // .insert(NotShadowReceiver)
-                        // .insert(ShowAabbGizmo {color: Some(color)})
-                        ;
-                } else {
-                    // Mark as hidden - no entity spawned yet
-                    grass_grid.0.insert((a as i32, b as i32), GrassTileState::hidden());
-                }
+                grass_grid.0.insert((a as i32, b as i32), GrassTileState::visible());
+                let contains_player = (player_trans.translation.x - a).abs() < GRASS_TILE_SIZE/2. && (player_trans.translation.z - b).abs() < GRASS_TILE_SIZE/2.;
+                let (main_mat, main_grass, main_data) = generate_grass(&mut meshes, &mut materials, a, b, BLADES_PER_ROW, GRASS_TILE_SIZE);
+                commands.spawn(main_mat)
+                    .insert(main_grass)
+                    .insert(main_data)
+                    .insert(ContainsPlayer(contains_player))
+                    .insert(aabb);
             }
         }
         commands.spawn(grass_grid);
@@ -323,7 +305,7 @@ fn update_grass(
         let mut grass_w_player: Option<Entity> = None;
 
         // Update grid state for completed async tasks (Pending -> Visible)
-        for (_, _, _, grass_trans, _, _, _) in grass.iter() {
+        for (_, _, _, grass_trans, _, _) in grass.iter() {
             let tile_key = (grass_trans.translation.x as i32, grass_trans.translation.z as i32);
             if let Some(state) = grass_grid.0.get(&tile_key) {
                 if state.render_state == RenderState::Pending {
@@ -333,6 +315,7 @@ fn update_grass(
         }
 
         // Helper closure to spawn grass tile asynchronously
+        let aabb = grass_tile_aabb();
         let spawn_grass_async = |commands: &mut Commands, a: f32, b: f32| {
             let transform = Transform::from_xyz(a, 0., b);
             let task_entity = commands.spawn_empty().id();
@@ -361,8 +344,7 @@ fn update_grass(
                     .insert(Grass)
                     .insert(grass_data)
                     .insert(ContainsPlayer(false))
-                    // .insert(NotShadowReceiver)
-                    // .insert(ShowAabbGizmo {color: Some(Color::PURPLE)})
+                    .insert(aabb)
                     .remove::<GenGrassTask>();
                 });
 
@@ -372,15 +354,7 @@ fn update_grass(
             commands.entity(task_entity).insert(GenGrassTask(task));
         };
 
-        for (ent, _mh, _grass_data, grass_trans, _visibility, mut contains_player, is_hidden) in grass.iter_mut() {
-            // Use player's y for frustum check since terrain height varies
-            let tile_center = Vec3::new(grass_trans.translation.x, player_trans.translation.y, grass_trans.translation.z);
-
-            // Check if tile is in camera frustum
-            let in_frustum = camera_frustum
-                .map(|(frustum, _)| is_point_in_frustum(frustum, tile_center))
-                .unwrap_or(true);
-
+        for (ent, _mh, _grass_data, grass_trans, _visibility, mut contains_player) in grass.iter_mut() {
             // Distance-based despawn (completely remove from grid when too far)
             if (player_trans.translation.x - grass_trans.translation.x).abs() > DESPAWN_DISTANCE
                 || (player_trans.translation.z - grass_trans.translation.z).abs() > DESPAWN_DISTANCE
@@ -388,31 +362,6 @@ fn update_grass(
                 grass_grid.0.remove(&(grass_trans.translation.x as i32, grass_trans.translation.z as i32));
                 commands.entity(ent).despawn_recursive();
                 continue;
-            }
-
-            // Frustum culling - hide instead of despawn
-            if !in_frustum {
-                if is_hidden.is_none() {
-                    grass_grid.0.insert(
-                        (grass_trans.translation.x as i32, grass_trans.translation.z as i32),
-                        GrassTileState::hidden()
-                    );
-                    commands.entity(ent)
-                        .insert(FrustumHidden)
-                        .insert(Visibility::Hidden);
-                }
-                continue;
-            }
-
-            // Show if was hidden but now in frustum
-            if is_hidden.is_some() {
-                grass_grid.0.insert(
-                    (grass_trans.translation.x as i32, grass_trans.translation.z as i32),
-                    GrassTileState::visible()
-                );
-                commands.entity(ent)
-                    .remove::<FrustumHidden>()
-                    .insert(Visibility::Visible);
             }
 
             // remove or add ContainsPlayer if applicable
@@ -429,27 +378,13 @@ fn update_grass(
                         let b = grass_trans.translation.z + j as f32 * GRASS_TILE_SIZE;
                         let tile_key = (a as i32, b as i32);
 
-                        // Only spawn if tile doesn't exist in grid or is marked hidden without an entity
+                        // Only spawn if tile doesn't exist in grid
                         let existing = grass_grid.0.get(&tile_key);
-                        let should_spawn = match existing {
-                            None => true,
-                            Some(state) if state.render_state == RenderState::Hidden => true,
-                            _ => false,
-                        };
+                        let should_spawn = existing.is_none();
 
                         if should_spawn {
-                            let tile_center = Vec3::new(a, player_trans.translation.y, b);
-                            let tile_in_frustum = camera_frustum
-                                .map(|(frustum, _)| is_point_in_frustum(frustum, tile_center))
-                                .unwrap_or(true);
-
-                            if tile_in_frustum {
-                                grass_grid.0.insert(tile_key, GrassTileState::pending());
-                                spawn_grass_async(&mut commands, a, b);
-                            } else {
-                                // Mark as hidden - will spawn when visible
-                                grass_grid.0.insert(tile_key, GrassTileState::hidden());
-                            }
+                            grass_grid.0.insert(tile_key, GrassTileState::pending());
+                            spawn_grass_async(&mut commands, a, b);
                         }
                     }
                 }
@@ -459,25 +394,8 @@ fn update_grass(
             }
         }
 
-        // Spawn tiles that were marked hidden but are now visible (no entity exists yet)
-        if let Some((frustum, _)) = camera_frustum {
-            let hidden_tiles: Vec<(i32, i32)> = grass_grid.0
-                .iter()
-                .filter(|(_, state)| state.render_state == RenderState::Hidden)
-                .map(|(pos, _)| *pos)
-                .collect();
-
-            for (a, b) in hidden_tiles {
-                let tile_center = Vec3::new(a as f32, player_trans.translation.y, b as f32);
-                if is_point_in_frustum(frustum, tile_center) {
-                    grass_grid.0.insert((a, b), GrassTileState::pending());
-                    spawn_grass_async(&mut commands, a as f32, b as f32);
-                }
-            }
-        }
-
         if let Some(_grass_w_player) = grass_w_player {
-            // update aabb color
+            // // update aabb color
             // commands.get_entity(grass_w_player).unwrap().insert(AabbGizmo {color: Some(Color::RED)});
         }
 

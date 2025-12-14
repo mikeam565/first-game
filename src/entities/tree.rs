@@ -1,8 +1,9 @@
 use bevy::prelude::*;
+use bevy::math::Vec3A;
 use bevy::render::render_asset::RenderAssetUsages;
 use bevy::render::render_resource::PrimitiveTopology;
 use bevy::render::mesh::Indices;
-use bevy::render::primitives::Frustum;
+use bevy::render::primitives::Aabb;
 use bevy::utils::HashMap;
 use bevy::ecs::system::{CommandQueue, SystemState};
 use bevy::tasks::{block_on, AsyncComputeTaskPool, Task};
@@ -11,9 +12,9 @@ use rand::{thread_rng, Rng, SeedableRng};
 use rand::rngs::StdRng;
 use crate::util::perlin::sample_terrain_height;
 use crate::util::perlin;
-use crate::util::render_state::{RenderState, FrustumHidden};
+use crate::util::render_state::RenderState;
 use crate::entities::terrain::{HEIGHT_TEMPERATE_START, HEIGHT_TEMPERATE_END};
-use crate::entities::grass::GRASS_BASE_COLOR_2;
+use crate::entities::grass::{GRASS_BASE_COLOR_2, GRASS_SECOND_COLOR};
 use super::player::ContainsPlayer;
 
 // Tree tile constants
@@ -56,9 +57,6 @@ const BILLBOARD_FOLIAGE_HEIGHT: f32 = 10.0;
 const BILLBOARD_TRUNK_COLOR: [f32; 4] = [0.35, 0.22, 0.10, 1.0];
 const BILLBOARD_FOLIAGE_COLOR: [f32; 4] = [0.02, 0.25, 0.06, 1.0];
 
-/// Margin for frustum culling
-const FRUSTUM_CULLING_MARGIN: f32 = TREE_TILE_SIZE * 0.707;
-
 #[derive(Component)]
 pub struct Tree;
 
@@ -78,10 +76,6 @@ impl TreeTileState {
         Self { render_state: RenderState::Visible, lod_level }
     }
 
-    pub fn hidden(lod_level: u32) -> Self {
-        Self { render_state: RenderState::Hidden, lod_level }
-    }
-
     pub fn pending() -> Self {
         Self { render_state: RenderState::Pending, lod_level: 0 }
     }
@@ -93,13 +87,19 @@ struct TreeGrid(HashMap<(i32, i32), TreeTileState>);
 #[derive(Component)]
 struct GenTreeTask(Task<CommandQueue>);
 
-fn is_point_in_frustum(frustum: &Frustum, point: Vec3) -> bool {
-    for half_space in &frustum.half_spaces {
-        if half_space.normal_d().dot(point.extend(1.0)) < -FRUSTUM_CULLING_MARGIN {
-            return false;
-        }
+/// Create an Aabb for a tree tile (centered at local origin)
+/// Tree mesh vertices are at actual terrain heights (not relative to transform)
+fn tree_tile_aabb() -> Aabb {
+    let half_size = TREE_TILE_SIZE / 2.0;
+    // Trees exist in temperate zone (210-800) plus tree height above terrain
+    let min_height = HEIGHT_TEMPERATE_START - 10.0;
+    let max_height = HEIGHT_TEMPERATE_END + TREE_TOP_HEIGHT + 5.0;
+    let center_y = (min_height + max_height) / 2.0;
+    let half_height = (max_height - min_height) / 2.0;
+    Aabb {
+        center: Vec3A::new(0.0, center_y, 0.0),
+        half_extents: Vec3A::new(half_size, half_height, half_size),
     }
-    true
 }
 
 fn get_lod_level(tile_distance: i32) -> u32 {
@@ -177,7 +177,7 @@ fn generate_billboard_tree_at(local_x: f32, y: f32, local_z: f32, base_index: u3
 
     let fidx = base_index + 4;
     verts.extend([f0, f1, f2]);
-    colors.extend([BILLBOARD_FOLIAGE_COLOR; 3]);
+    colors.extend([GRASS_SECOND_COLOR; 3]);
     indices.extend([fidx, fidx + 1, fidx + 2]);
 
     (verts, indices, colors)
@@ -372,12 +372,14 @@ fn spawn_tree_tile(
     .insert(TreeTile { lod_level })
     .insert(ContainsPlayer(false))
     .insert(Name::new("TreeTile"))
+    .insert(tree_tile_aabb())
     .id()
 }
 
 fn spawn_tree_tile_async(commands: &mut Commands, tile_x: f32, tile_z: f32, lod_level: u32) {
     let thread_pool = AsyncComputeTaskPool::get();
     let transform = Transform::from_xyz(tile_x, 0.0, tile_z);
+    let aabb = tree_tile_aabb();
     let task_entity = commands.spawn_empty().id();
 
     let task = thread_pool.spawn(async move {
@@ -405,6 +407,7 @@ fn spawn_tree_tile_async(commands: &mut Commands, tile_x: f32, tile_z: f32, lod_
                 .insert(TreeTile { lod_level })
                 .insert(ContainsPlayer(false))
                 .insert(Name::new("TreeTile"))
+                .insert(aabb)
                 .remove::<GenTreeTask>();
         });
 
@@ -427,16 +430,13 @@ fn update_trees(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    mut trees: Query<(Entity, &TreeTile, &Handle<Mesh>, &Transform, &mut ContainsPlayer, Option<&FrustumHidden>), With<Tree>>,
+    mut trees: Query<(Entity, &TreeTile, &Handle<Mesh>, &Transform, &mut ContainsPlayer), With<Tree>>,
     mut grid: Query<&mut TreeGrid>,
     player: Query<&Transform, With<crate::entities::player::Player>>,
-    camera: Query<(&Frustum, &GlobalTransform), With<Camera3d>>,
 ) {
     let Ok(player_trans) = player.get_single() else { return };
     let px = player_trans.translation.x;
     let pz = player_trans.translation.z;
-
-    let camera_frustum = camera.get_single().ok();
 
     // Get player's current tile
     let player_tile_x = (px / TREE_TILE_SIZE).floor() as i32;
@@ -453,23 +453,14 @@ fn update_trees(
                 let tile_distance = i.abs().max(j.abs());
                 let lod_level = get_lod_level(tile_distance);
 
-                let tile_center = Vec3::new(tile_x, player_trans.translation.y, tile_z);
-                let in_frustum = camera_frustum
-                    .map(|(frustum, _)| is_point_in_frustum(frustum, tile_center))
-                    .unwrap_or(true);
-
-                if in_frustum {
-                    if tile_distance <= LOD_HIGH_DISTANCE {
-                        // Spawn high-detail synchronously for nearby tiles
-                        tree_grid.0.insert((tile_x as i32, tile_z as i32), TreeTileState::visible(lod_level));
-                        spawn_tree_tile(&mut commands, &mut meshes, &mut materials, tile_x, tile_z, lod_level);
-                    } else {
-                        // Spawn async for distant tiles
-                        tree_grid.0.insert((tile_x as i32, tile_z as i32), TreeTileState::pending());
-                        spawn_tree_tile_async(&mut commands, tile_x, tile_z, lod_level);
-                    }
+                if tile_distance <= LOD_HIGH_DISTANCE {
+                    // Spawn high-detail synchronously for nearby tiles
+                    tree_grid.0.insert((tile_x as i32, tile_z as i32), TreeTileState::visible(lod_level));
+                    spawn_tree_tile(&mut commands, &mut meshes, &mut materials, tile_x, tile_z, lod_level);
                 } else {
-                    tree_grid.0.insert((tile_x as i32, tile_z as i32), TreeTileState::hidden(lod_level));
+                    // Spawn async for distant tiles
+                    tree_grid.0.insert((tile_x as i32, tile_z as i32), TreeTileState::pending());
+                    spawn_tree_tile_async(&mut commands, tile_x, tile_z, lod_level);
                 }
             }
         }
@@ -479,7 +470,7 @@ fn update_trees(
         let Ok(mut tree_grid) = grid.get_single_mut() else { return };
 
         // Update grid state for completed async tasks
-        for (_, tile, _, trans, _, _) in trees.iter() {
+        for (_, tile, _, trans, _) in trees.iter() {
             let tile_key = (trans.translation.x as i32, trans.translation.z as i32);
             if let Some(state) = tree_grid.0.get(&tile_key) {
                 if state.render_state == RenderState::Pending {
@@ -488,39 +479,15 @@ fn update_trees(
             }
         }
 
-        for (ent, tile, mesh_handle, trans, mut contains_player, is_hidden) in trees.iter_mut() {
+        for (ent, tile, mesh_handle, trans, mut contains_player) in trees.iter_mut() {
             let tile_x = trans.translation.x;
             let tile_z = trans.translation.z;
-            let tile_center = Vec3::new(tile_x, player_trans.translation.y, tile_z);
-
-            let in_frustum = camera_frustum
-                .map(|(frustum, _)| is_point_in_frustum(frustum, tile_center))
-                .unwrap_or(true);
 
             // Distance-based despawn
             if (px - tile_x).abs() > DESPAWN_DISTANCE || (pz - tile_z).abs() > DESPAWN_DISTANCE {
                 tree_grid.0.remove(&(tile_x as i32, tile_z as i32));
                 commands.entity(ent).despawn_recursive();
                 continue;
-            }
-
-            // Frustum culling
-            if !in_frustum {
-                if is_hidden.is_none() {
-                    tree_grid.0.insert((tile_x as i32, tile_z as i32), TreeTileState::hidden(tile.lod_level));
-                    commands.entity(ent)
-                        .insert(FrustumHidden)
-                        .insert(Visibility::Hidden);
-                }
-                continue;
-            }
-
-            // Show if was hidden
-            if is_hidden.is_some() {
-                tree_grid.0.insert((tile_x as i32, tile_z as i32), TreeTileState::visible(tile.lod_level));
-                commands.entity(ent)
-                    .remove::<FrustumHidden>()
-                    .insert(Visibility::Visible);
             }
 
             // Check LOD change
@@ -552,48 +519,17 @@ fn update_trees(
                             let new_tile_z = tile_z + j as f32 * TREE_TILE_SIZE;
                             let tile_key = (new_tile_x as i32, new_tile_z as i32);
 
-                            let existing = tree_grid.0.get(&tile_key);
-                            let should_spawn = match existing {
-                                None => true,
-                                Some(state) if state.render_state == RenderState::Hidden => true,
-                                _ => false,
-                            };
+                            // Only spawn if tile doesn't exist in grid
+                            let should_spawn = tree_grid.0.get(&tile_key).is_none();
 
                             if should_spawn {
-                                let tile_center = Vec3::new(new_tile_x, player_trans.translation.y, new_tile_z);
-                                let tile_in_frustum = camera_frustum
-                                    .map(|(frustum, _)| is_point_in_frustum(frustum, tile_center))
-                                    .unwrap_or(true);
-
                                 let tile_distance = i.abs().max(j.abs());
                                 let lod_level = get_lod_level(tile_distance);
-
-                                if tile_in_frustum {
-                                    tree_grid.0.insert(tile_key, TreeTileState::pending());
-                                    spawn_tree_tile_async(&mut commands, new_tile_x, new_tile_z, lod_level);
-                                } else {
-                                    tree_grid.0.insert(tile_key, TreeTileState::hidden(lod_level));
-                                }
+                                tree_grid.0.insert(tile_key, TreeTileState::pending());
+                                spawn_tree_tile_async(&mut commands, new_tile_x, new_tile_z, lod_level);
                             }
                         }
                     }
-                }
-            }
-        }
-
-        // Spawn hidden tiles that are now visible
-        if let Some((frustum, _)) = camera_frustum {
-            let hidden_tiles: Vec<(i32, i32, u32)> = tree_grid.0
-                .iter()
-                .filter(|(_, state)| state.render_state == RenderState::Hidden)
-                .map(|((tx, tz), state)| (*tx, *tz, state.lod_level))
-                .collect();
-
-            for (tx, tz, lod) in hidden_tiles {
-                let tile_center = Vec3::new(tx as f32, player_trans.translation.y, tz as f32);
-                if is_point_in_frustum(frustum, tile_center) {
-                    tree_grid.0.insert((tx, tz), TreeTileState::pending());
-                    spawn_tree_tile_async(&mut commands, tx as f32, tz as f32, lod);
                 }
             }
         }

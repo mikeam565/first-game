@@ -30,6 +30,7 @@ fn main() {
             util::perlin::PerlinPlugin,
             ent::terrain::TerrainPlugin,
             ent::grass::GrassPlugin,
+            ent::tree::TreePlugin,
             ent::player::PlayerPlugin,
             // ent::enemy::EnemyPlugin,
             // ent::projectiles::ProjectilePlugin,

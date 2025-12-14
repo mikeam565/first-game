@@ -1,8 +1,9 @@
+use bevy::pbr::{ExtendedMaterial, MaterialExtension, MaterialExtensionKey, MaterialExtensionPipeline};
 use bevy::prelude::*;
 use bevy::math::Vec3A;
 use bevy::render::render_asset::RenderAssetUsages;
-use bevy::render::render_resource::PrimitiveTopology;
-use bevy::render::mesh::Indices;
+use bevy::render::render_resource::{AsBindGroup, PrimitiveTopology, RenderPipelineDescriptor, SpecializedMeshPipelineError, VertexBufferLayout, VertexFormat};
+use bevy::render::mesh::{Indices, MeshVertexAttribute, MeshVertexBufferLayout};
 use bevy::render::primitives::Aabb;
 use bevy::utils::HashMap;
 use bevy::ecs::system::{CommandQueue, SystemState};
@@ -16,6 +17,10 @@ use crate::util::render_state::RenderState;
 use crate::entities::terrain::{HEIGHT_TEMPERATE_START, HEIGHT_TEMPERATE_END};
 use crate::entities::grass::{GRASS_BASE_COLOR_2, GRASS_SECOND_COLOR};
 use super::player::ContainsPlayer;
+
+const ATTRIBUTE_BASE_Y: MeshVertexAttribute = MeshVertexAttribute::new("BaseY", 988540917, VertexFormat::Float32);
+const ATTRIBUTE_STARTING_POSITION: MeshVertexAttribute = MeshVertexAttribute::new("StartingPosition", 988540916, VertexFormat::Float32x3);
+const ATTRIBUTE_WORLD_POSITION: MeshVertexAttribute = MeshVertexAttribute::new("WorldPosition", 988540915, VertexFormat::Float32x3);
 
 // Tree tile constants
 const TREE_TILE_SIZE: f32 = 64.0;
@@ -286,6 +291,8 @@ fn generate_tree_tile_mesh(tile_x: f32, tile_z: f32, lod_level: u32) -> Mesh {
     let terrain_perlin = perlin::terrain_perlin();
 
     let mut all_verts: Vec<Vec3> = vec![];
+    let mut bases: Vec<f32> = Vec::new();
+    let mut tree_offsets = Vec::new();
     let mut all_indices: Vec<u32> = vec![];
     let mut all_colors: Vec<[f32; 4]> = vec![];
     let mut vertex_count: u32 = 0;
@@ -317,6 +324,10 @@ fn generate_tree_tile_mesh(tile_x: f32, tile_z: f32, lod_level: u32) -> Mesh {
                 *idx += vertex_count;
             }
             vertex_count += verts.len() as u32;
+            for _ in 0..verts.len() {
+                bases.push(y);
+                tree_offsets.push([world_x, y, world_z]);
+            }
             all_verts.append(&mut verts);
             all_indices.append(&mut indices);
             all_colors.append(&mut colors);
@@ -324,6 +335,10 @@ fn generate_tree_tile_mesh(tile_x: f32, tile_z: f32, lod_level: u32) -> Mesh {
             // Billboard tree
             let (mut verts, mut indices, mut colors) = generate_billboard_tree_at(local_x, y, local_z, vertex_count);
             vertex_count += verts.len() as u32;
+            for _ in 0..verts.len() {
+                bases.push(y);
+                tree_offsets.push([world_x, y, world_z]);
+            }
             all_verts.append(&mut verts);
             all_indices.append(&mut indices);
             all_colors.append(&mut colors);
@@ -334,35 +349,43 @@ fn generate_tree_tile_mesh(tile_x: f32, tile_z: f32, lod_level: u32) -> Mesh {
     let normals: Vec<[f32; 3]> = all_verts.iter().map(|_| [0.0, 1.0, 0.0]).collect();
 
     mesh.insert_indices(Indices::U32(all_indices));
-    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions.clone());
     mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
     mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, all_colors);
+
+    mesh.insert_attribute(ATTRIBUTE_BASE_Y, bases);
+    mesh.insert_attribute(ATTRIBUTE_STARTING_POSITION, positions);
+    mesh.insert_attribute(ATTRIBUTE_WORLD_POSITION, tree_offsets);
 
     mesh
 }
 
-fn tree_material() -> StandardMaterial {
-    StandardMaterial {
+fn tree_material() -> ExtendedMaterial<StandardMaterial, TreeMaterialExtension> {
+    ExtendedMaterial { base: StandardMaterial {
         base_color: Color::WHITE,
-        double_sided: true,
+        double_sided: false,
         perceptual_roughness: 1.0,
         reflectance: 0.3,
         cull_mode: None,
+        opaque_render_method: bevy::pbr::OpaqueRendererMethod::Forward,
+        unlit: false,
         ..default()
-    }
+    },
+    extension: TreeMaterialExtension {  }
+}
 }
 
 fn spawn_tree_tile(
     commands: &mut Commands,
     meshes: &mut ResMut<Assets<Mesh>>,
-    materials: &mut ResMut<Assets<StandardMaterial>>,
+    materials: &mut ResMut<Assets<ExtendedMaterial<StandardMaterial, TreeMaterialExtension>>>,
     tile_x: f32,
     tile_z: f32,
     lod_level: u32,
 ) -> Entity {
     let mesh = generate_tree_tile_mesh(tile_x, tile_z, lod_level);
 
-    commands.spawn(PbrBundle {
+    commands.spawn(MaterialMeshBundle {
         mesh: meshes.add(mesh),
         material: materials.add(tree_material()),
         transform: Transform::from_xyz(tile_x, 0.0, tile_z),
@@ -390,14 +413,14 @@ fn spawn_tree_tile_async(commands: &mut Commands, tile_x: f32, tile_z: f32, lod_
             let (mesh_handle, mat_handle) = {
                 let mut system_state = SystemState::<(
                     ResMut<Assets<Mesh>>,
-                    ResMut<Assets<StandardMaterial>>,
+                    ResMut<Assets<ExtendedMaterial<StandardMaterial, TreeMaterialExtension>>>,
                 )>::new(world);
                 let (mut meshes, mut materials) = system_state.get_mut(world);
                 (meshes.add(mesh), materials.add(tree_material()))
             };
 
             world.entity_mut(task_entity)
-                .insert(PbrBundle {
+                .insert(MaterialMeshBundle {
                     mesh: mesh_handle,
                     material: mat_handle,
                     transform,
@@ -429,7 +452,7 @@ fn handle_tree_tasks(mut commands: Commands, mut tree_tasks: Query<&mut GenTreeT
 fn update_trees(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut materials: ResMut<Assets<ExtendedMaterial<StandardMaterial, TreeMaterialExtension>>>,
     mut trees: Query<(Entity, &TreeTile, &Handle<Mesh>, &Transform, &mut ContainsPlayer), With<Tree>>,
     mut grid: Query<&mut TreeGrid>,
     player: Query<&Transform, With<crate::entities::player::Player>>,
@@ -536,10 +559,58 @@ fn update_trees(
     }
 }
 
+#[derive(Asset, TypePath, AsBindGroup, Debug, Clone)]
+pub struct TreeMaterialExtension {
+}
+
+impl MaterialExtension for TreeMaterialExtension {
+
+    fn vertex_shader() -> bevy::render::render_resource::ShaderRef {
+        "shaders/tree_shader.wgsl".into()
+    }
+
+    // fn fragment_shader() -> ShaderRef {
+    //     "shaders/tree_shader.wgsl".into()
+    // }
+
+    fn specialize(
+        _pipeline: &MaterialExtensionPipeline,
+        descriptor: &mut RenderPipelineDescriptor,
+        layout: &MeshVertexBufferLayout,
+        _key: MaterialExtensionKey<TreeMaterialExtension>,
+    ) -> Result<(), SpecializedMeshPipelineError> {
+        let mut pos_position = 0;
+        let mut normal_position = 1;
+        let mut color_position = 5;
+        if let Some(label) = &mut descriptor.label {
+            println!("Label is: {}", label);
+            if label == "pbr_prepass_pipeline" {
+                pos_position = 0;
+                normal_position = 3;
+                color_position = 7;
+            }
+        }
+        
+        let vertex_layout = layout.get_layout(&[
+            Mesh::ATTRIBUTE_POSITION.at_shader_location(pos_position),
+            Mesh::ATTRIBUTE_NORMAL.at_shader_location(normal_position),
+            Mesh::ATTRIBUTE_COLOR.at_shader_location(color_position),
+            // Mesh::ATTRIBUTE_UV_0.at_shader_location(1),
+            // Mesh::ATTRIBUTE_TANGENT.at_shader_location(4),
+            ATTRIBUTE_BASE_Y.at_shader_location(16),
+            ATTRIBUTE_STARTING_POSITION.at_shader_location(17),
+            ATTRIBUTE_WORLD_POSITION.at_shader_location(18),
+        ])?;
+        descriptor.vertex.buffers = vec![vertex_layout];
+        Ok(())
+    }
+}
+
 pub struct TreePlugin;
 
 impl Plugin for TreePlugin {
     fn build(&self, app: &mut App) {
+        app.add_plugins(MaterialPlugin::<ExtendedMaterial<StandardMaterial, TreeMaterialExtension>>::default());
         app.add_systems(Update, (update_trees, handle_tree_tasks));
     }
 }

@@ -33,18 +33,39 @@ pub fn sample_terrain_height(terrain_perlin: &Perlin, x: f32, z: f32) -> f32 {
 
 fn detail_component(terrain_perlin: &Perlin, x: f32, z: f32) -> f32 {
     let mountain_sample = sample_mountain(terrain_perlin, x, z);
-    terrain_perlin.get([z as f64 / 16., x as f64 / 16.]) as f32 * (mountain_sample/0.5)*TERRAIN_BUMPINESS // finer detail
+    // Detail: minimal near BASE_LEVEL (low |mountain_sample|),
+    // increases with distance from BASE_LEVEL (both up and down)
+    let abs_sample = mountain_sample.abs();
+    // Rises quickly then levels off
+    let detail_factor = abs_sample.sqrt();
+    terrain_perlin.get([z as f64 / 16., x as f64 / 16.]) as f32 * detail_factor * TERRAIN_BUMPINESS
 }
 
 fn hill_component(terrain_perlin: &Perlin, x: f32, z: f32) -> f32 {
     let mountain_sample = sample_mountain(terrain_perlin, x, z);
-
-    terrain_perlin.get([x as f64 / 100., z as f64 / 100.]) as f32 * (mountain_sample/0.25)*HILL_HEIGHTS
+    // Hills: zero near BASE_LEVEL, peak at intermediate elevations
+    // (mountain bases), then reduce at peaks. Works for both above and below water.
+    let abs_sample = mountain_sample.abs();
+    // Bell curve centered at 0.4, multiplied by abs_sample to force zero at origin
+    let center = 0.4;
+    let width = 0.35;
+    let bell = (-((abs_sample - center) / width).powi(2)).exp();
+    let hill_factor = bell * abs_sample * 5.0;
+    terrain_perlin.get([x as f64 / 100., z as f64 / 100.]) as f32 * hill_factor * HILL_HEIGHTS
 }
 
 fn mountain_component(terrain_perlin: &Perlin, x: f32, z: f32) -> f32 {
     let mountain_sample = sample_mountain(terrain_perlin, x, z);
-    MOUNTAIN_HEIGHTS * mountain_sample/(1.4 - mountain_sample)
+    // No cap - polynomial that accelerates. Works for negative (underwater) too.
+    let sign = mountain_sample.signum();
+    let abs_sample = mountain_sample.abs();
+    // Dead zone only very close to zero for flat areas near BASE_LEVEL
+    if abs_sample < 0.05 {
+        0.0
+    } else {
+        let adjusted = abs_sample - 0.05;
+        sign * MOUNTAIN_HEIGHTS * adjusted * (1.0 + adjusted * 2.0)
+    }
 }
 
 fn sample_mountain(terrain_perlin: &Perlin, x: f32, z: f32) -> f32 {
